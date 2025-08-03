@@ -1,0 +1,635 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="自定义窗型公式配置" creationComplete="init(event)"
+			   xmlns:s="library://ns.adobe.com/flex/spark" close="close(event)"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="830" height="650" backgroundColor="{FlexClientConfig.getInstance().Theme}"
+			   horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" xmlns:my="skins.my.*" >
+	<!--  backgroundColor="#c6e7ff" -->
+	<fx:Script>
+		<![CDATA[
+			import common.ArrayCollectionUtil;
+			import common.DataCmdEvent;
+			import common.DataFormat;
+			import common.FileUtil;
+			import common.FlexClientConfig;
+			import common.StringHelper;
+			
+			import draw.panel.DrawPanel2;
+			
+			import entity.AluPro;
+			import entity.AluProDetail;
+			import entity.CustomFormula;
+			import entity.PicBL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.TextInput;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.CursorManager;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			import spark.components.supportClasses.ButtonBase;
+			import spark.components.supportClasses.TextBase;
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			[Bindable]
+			public var aluProDetailArray:ArrayCollection;
+			[Bindable]
+			public var aluPro:AluPro;
+			public var delList:ArrayCollection;
+			
+			[Bindable]
+			public var item:CustomFormula;
+			public var dbStatement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			
+			[Bindable]
+			private var aluProArray:ArrayCollection;
+			[Bindable]private var blNum:int=0;//当前变量数
+			[Embed(source="/img/mouseAdd.png")]
+			private var imageCursor:Class;
+			private var file:File;
+			[Bindable]private var tagCopy:Boolean=true;//复制按钮
+			public static const LOADDRAWPIC:String="LOAD_DRAW_PIC_DATA";
+			protected function init(event:FlexEvent):void
+			{
+				file = new File();
+				file.nativePath = FileUtil.winTmpPath;
+				file.addEventListener(Event.SELECT, selectHandler);
+				aluProArray = AluPro.getAluPros();
+			}
+			private function selectHandler(event:Event=null):void { 
+				file.addEventListener(Event.COMPLETE, onLoadComplete);
+				file.load();
+			} 
+			//选择窗型完毕后,根据窗型名,材料id,获取该材料,窗型下的所有公式
+			private function onLoadComplete(e:Event):void 
+			{
+				FileUtil.removeAllChild(winPic);
+				winPic.source = file.nativePath;
+				picName.text = file.name;
+				blNum=autoSetBLOnPic(this.winPic,file.name);
+				this.dataArray = CustomFormula.getCustomFormulasByParam(aluPro==null?0:aluPro.id,file.name);
+			}
+			//自动图片上添加变量
+			public function autoSetBLOnPic(_winPic:Image,_picName:String):int{
+				var arrBL:ArrayCollection=PicBL.getBlbyParam(_picName);
+				if(arrBL==null||arrBL.length==0){
+					return 0;
+				}
+				for(var i:int=0;i<arrBL.length;i++){
+					var blItem:PicBL = arrBL.getItemAt(i) as PicBL;
+					createTextInputOnPic(_winPic,"text"+i,blItem.blX*_winPic.width/blItem.picWidth,blItem.blY*_winPic.height/blItem.picHeight,blItem.blName);
+				}
+				return arrBL.length;
+			}
+			private function browseHandler():void { 
+				file.browse([FileUtil.imageTypes]); 
+			} 
+			
+			public function setData(_aluPro:AluPro,_aluProArray:ArrayCollection,_picName:String=""):void{
+				this.aluPro = _aluPro;
+				this.aluProArray=_aluProArray;
+				this.aluProDetailArray = AluProDetail.getAluProsById(aluPro==null?0:aluPro.id);
+				//存在窗型图,获取一下变量和公式
+				if(_picName.length>0){
+					winPic.source = FileUtil.winTmpPath+_picName;
+					picName.text = _picName;
+					blNum=autoSetBLOnPic(this.winPic,_picName);
+					this.dataArray = CustomFormula.getCustomFormulasByParam(aluPro==null?0:aluPro.id,_picName);
+				}
+			}
+			
+			private function handleResult():void
+			{
+				var result:SQLResult = dbStatement.getResult();
+				if (result != null) {  
+					this.dataArray = new ArrayCollection(result.data);
+				}
+			}
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			
+			protected function add(event:MouseEvent):void
+			{
+				if(file==null||file.name==null||picName.text==""){
+					Alert.show("请先选择窗型图，再添加公式！","提示");
+					return;
+				}
+				if(winPic.numChildren<=1){
+					Alert.show("请先添加窗型变量！","提示");
+					return;
+				}
+				if(aluPro==null||aluPro.id==0){
+					Alert.show("请先选择型材信息！","提示");
+					return;
+				}
+				
+				if(dataArray==null){
+					dataArray=new ArrayCollection();
+				}
+				var item:CustomFormula = new CustomFormula();
+				item.aluProId = aluPro.id;
+				item.windowsPicName = picName.text;
+				dataArray.addItem(item);
+			}
+			
+			protected function del(event:MouseEvent):void
+			{
+				if(dataGrid.selectedItem==null){
+					Alert.show("请选中相关数据后删除！","提示");
+					return;
+				}
+				if(delList==null){
+					delList=new ArrayCollection();
+				}
+				var itemList:ArrayCollection=new ArrayCollection(dataGrid.selectedItems);
+				for each(var item:CustomFormula in itemList){
+					if(item!=null&&item.id>0){
+						delList.addItem(item);
+					}
+					dataArray.removeItemAt(dataArray.getItemIndex(item));
+				}
+				
+				
+			}
+			protected function dataGrid_itemFocusInHandler(event:DataGridEvent):void
+			{
+				if(dataGrid.columns[event.columnIndex].dataField=="formula"){//event.dataField=="formula" 这里为null
+					var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+					ti.restrict="A-Z0-9\\/+\\-\\*().#";
+				}
+			}
+			
+			protected function dataGrid_itemEditEndHandler(event:DataGridEvent):void
+			{
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				var text:String=ti.text;
+				var item:CustomFormula=dataGrid.selectedItem as CustomFormula;
+				if(event.dataField=="amount"){
+					var num:Number = Number(text);
+					if(isNaN(num))
+					{
+						event.preventDefault();
+						ti.errorString="输入格式错误";
+						return;
+					}
+				}
+				event.itemRenderer.data[event.dataField] = text;
+				ti.text = text;
+			}
+			
+			protected function save():void
+			{
+				if(!check()){
+					return;
+				}
+				//先保存变量
+				saveBL();
+				var item:CustomFormula ;
+				for(var i:int=0;i<dataArray.length;i++){
+					item = dataArray.getItemAt(i) as CustomFormula;
+					item.orderNum=i+1;
+					if(item.id>0){
+						CustomFormula.update(item);
+					}else{
+						CustomFormula.insert(item);
+					}
+				}
+				if(delList!=null&&delList.length>0){
+					for(i=0;i<delList.length;i++){
+						item = delList.getItemAt(i) as CustomFormula;
+						CustomFormula.deleted(item);
+					}
+				}
+				this.dataArray = CustomFormula.getCustomFormulasByParam(aluPro==null?0:aluPro.id,picName.text);
+				Alert.show("保存成功！","提示");
+			}
+			private function check():Boolean{
+				if(picName.text==""||blNum<1){
+					Alert.show("缺少窗型图或窗型变量，无法保存！","提示");
+					return false;
+				}
+				
+				var item:CustomFormula;
+				for(var i:int=0;i<dataArray.length;i++){
+					item = dataArray.getItemAt(i) as CustomFormula;
+					if(item.aluProId==0||item.windowsPicName==null||StringUtil.trim(item.windowsPicName)==""){
+						Alert.show("未获取窗型数据！","提示");
+						return false;
+					}
+					if(item.amount<=0){
+						Alert.show("数量必须大于0！","提示");
+						return false;
+					}
+					if(item.type<0){
+						Alert.show("材料类型必须选择！","提示");
+						return false;
+					}
+					if(item.formula==null||StringUtil.trim(item.formula)==""){
+						Alert.show("材料公式为空！","提示");
+						return false;
+					}
+					if(item.type==2&&item.formula.indexOf("#")<0){
+						Alert.show("玻璃长宽公式需以#隔开！","提示");
+						return false;
+					}
+				}
+				//判断变量名是否重复
+				var nac:ArrayCollection = new ArrayCollection();
+				
+				var childs:int=winPic.numChildren;
+				for(;childs>1;childs--){
+					var _text:TextInput = winPic.getChildAt(childs-1) as TextInput;
+					if(_text&&_text.parent){
+						if(nac.contains(_text.text)){
+							Alert.show("变量内容重复！","提示");
+							return false;
+						}
+						nac.addItem(_text.text); 
+					}
+				}
+				return true;
+			}
+			//已存在的公式
+			private var gsHavedArr:ArrayCollection;
+			/**另存为,注意:该方法不保存变量*/
+			protected function saveOther(event:MouseEvent):void
+			{
+				if(!check()){
+					return;
+				}
+				if(aluCombox.selectedIndex<0||aluCombox.selectedItem==null){
+					Alert.show("请选择以上窗型公式需要另存的型材目录！","提示");
+					return;
+				}
+				var comboItem:Object = aluCombox.selectedItem;//这里强转失败
+				//根据所选的型材,和上面的窗型图,去获取一下有没有公式数据.
+				gsHavedArr=CustomFormula.getCustomFormulasByParam(comboItem.id,picName.text);
+				if(gsHavedArr!=null&&gsHavedArr.length>0){
+					Alert.show(comboItem.name+" 下该窗型图存在已保存的公式，是否覆盖？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler);
+				}else{
+					otherSave();
+				}
+			}
+			private function alertCloseHandler(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					var haveItem:CustomFormula;
+					//删除已有公式
+					for(var i:int=0;i<gsHavedArr.length;i++){
+						haveItem=gsHavedArr.getItemAt(i) as CustomFormula;
+						CustomFormula.deleted(haveItem);
+					}
+					otherSave();
+				}
+			}
+			/**另存新公式*/
+			private function otherSave():void{
+				for(var i:int=0;i<dataArray.length;i++){
+					var _item:CustomFormula = dataArray.getItemAt(i) as CustomFormula;
+					var newItem:CustomFormula=CustomFormula.clone(_item);
+					newItem.orderNum=i+1;
+					newItem.aluProId = aluCombox.selectedItem.id;/**关键:另存一定要把型材id重新赋值*/
+					CustomFormula.insert(newItem);
+				}
+				Alert.show("另存成功！","提示");
+			}
+			
+			private function mouseChange(tag:int):void{
+				if(tag==1&&CursorManager.currentCursorID==0){
+					CursorManager.setCursor(imageCursor);
+				}else{
+					CursorManager.removeCursor(CursorManager.currentCursorID);
+				}
+			}
+			/**根据图片创建对应变量,和变量内容*/
+			public function createTextInputOnPic(_winPic:Image,_textname:String,_x:Number,_y:Number,_textValue:String=""):void{
+				_winPic.validateNow();
+				var textIn:TextInput = new TextInput();
+				textIn.height=20;
+				textIn.width=40;
+				textIn.maxChars=1;
+				textIn.x = _x;
+				textIn.y = _y;
+				textIn.name=_textname;
+				textIn.text=_textValue;
+				textIn.restrict="A-Z";//只能输入大写字母，且字符一个
+				textIn.toolTip=_textValue==""?"请输入变量名":_textValue;
+				textIn.styleName="smallText";
+				textIn.addEventListener(MouseEvent.CLICK,function removeText(e:MouseEvent):void{
+					if(e.ctrlKey){
+						_winPic.removeChild(_winPic.getChildByName(_textname) as DisplayObject);
+						blNum--;
+					}
+				});
+				_winPic.addChild(textIn);
+			}
+		
+			private function addTextInput(event:MouseEvent):void{
+				if(CursorManager.currentCursorID!=0){
+					createTextInputOnPic(this.winPic,"text"+winPic.numChildren,winPic.contentMouseX,winPic.contentMouseY);
+					blNum++;
+				}
+				mouseChange(0);
+			}
+			/**保存图片上的变量*/
+			private function saveBL():void{
+				
+				//保存前先把之前的删除//默认覆盖,就不提示了
+				var arrBL:ArrayCollection=PicBL.getBlbyParam(picName.text);
+				PicBL.delBlbyParam(picName.text);//先删除
+				saveBlexec();
+				
+			}
+			private function saveBlexec():void{
+				/* winPic.numChildren;
+				pciHbox.getChildren(); */
+				var childs:int=winPic.numChildren;
+				for(;childs>1;childs--){
+					var _text:TextInput = winPic.getChildAt(childs-1) as TextInput;
+					if(_text&&_text.parent){
+						var blItem:PicBL = new PicBL();
+						blItem.picName = picName.text;
+						blItem.blName = _text.text;
+						if(StringUtil.trim(blItem.blName)==""){
+							//变量内容没写默认不保存
+							continue;
+						}
+						blItem.blX = DataFormat.formatNumber2(_text.x);
+						blItem.blY = DataFormat.formatNumber2(_text.y);
+						blItem.picWidth=winPic.width;
+						blItem.picHeight=winPic.height;
+						PicBL.insert(blItem);
+					}
+				}
+				//返回变量数
+				this.blNum=PicBL.getBlbyParam(picName.text).length;
+			}
+			
+			protected function close(event:CloseEvent):void
+			{
+				dispatchEvent(new DataCmdEvent(OrderDetailPanel.LOADPIC,picName.text));
+				mouseChange(0);
+				PopUpEffect.Hide(this);
+			}
+			
+			protected function showCreatePicPanel(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var draw:DrawPanel2=new DrawPanel2();
+				PopUpEffect.Show(draw,this.parentApplication as DisplayObject);
+			}
+			
+			[Bindable]
+			public var copyArrayCollection:ArrayCollection ;//复制集合
+			/**窗型不同,公式相同*/
+			private function copy():void{
+				if(tagCopy){//复制
+					if(dataArray==null||dataArray.length==0){
+						Alert.show("没有可复制的数据","提示");
+						return;
+					}
+					copyArrayCollection = new ArrayCollection();
+					copyArrayCollection.addAll(dataArray);
+					tagCopy=false;
+				}else{//粘贴
+					
+					if(copyArrayCollection==null||copyArrayCollection.length==0){
+						Alert.show("没有可粘贴的数据","提示");
+						return;
+					}
+					if(picName.text==""||aluCombox.selectedItem==null||aluCombox.selectedItem.id==0
+						||copyArrayCollection==null||copyArrayCollection.length==0){
+						Alert.show("粘贴失败","提示");
+						return;
+					}
+					//当复制的公式，窗型图和型材同时等于 界面中的图和选择的型材，不能粘贴
+					if(copyArrayCollection.getItemAt(0).windowsPicName==picName.text&&copyArrayCollection.getItemAt(0).aluProId==aluCombox.selectedItem.id){
+						Alert.show("不能粘贴在复制的窗型下，请尝试更换窗型图或者更换型材","提示");
+						return;
+					}
+					
+					if(dataArray==null){
+						dataArray=new ArrayCollection();
+					}
+					//窗型替换，清空id
+					for each(var _item:CustomFormula in copyArrayCollection){
+						_item.windowsPicName = picName.text;
+						_item.aluProId=aluCombox.selectedItem.id;
+						_item.id=0;
+					}
+					dataArray.addAll(copyArrayCollection);
+					copyArrayCollection.removeAll();
+					tagCopy=true;
+					Alert.show("粘贴成功，请注意及时保存！","提示");
+					
+				}	
+			}
+			private function replaceAll():void{
+				if(dataArray==null||dataArray.length==0){
+					return;
+				}
+				for each(var _item:CustomFormula in dataArray){
+					_item.formula=StringHelper.replaceAll(_item.formula,txtBefore.text,txtAfter.text);
+				}
+			}
+			private function aluChange():void{
+				aluPro = aluCombox.selectedItem as AluPro;
+				this.dataArray = CustomFormula.getCustomFormulasByParam(aluPro==null?0:aluPro.id,picName.text);
+				this.aluProDetailArray = AluProDetail.getAluProsById(aluPro==null?0:aluPro.id);
+			}
+			private function fixPic():void{
+				var draw2:DrawPanel2=new DrawPanel2();
+				PopUpEffect.Show(draw2,this.parentApplication as DisplayObject);
+				draw2.loadPic(picName.text);
+				draw2.addEventListener(LOADDRAWPIC,function(e:DataCmdEvent):void{
+					loadDrawPicChange(e.data as String);
+				});
+			}
+			public function loadDrawPicChange(_picName:String):void{
+				this.winPic.source = null;
+				this.winPic.source = FileUtil.winTmpPath+_picName;
+				picName.text=_picName;
+				FileUtil.removeAllChild(winPic);
+				blNum=autoSetBLOnPic(this.winPic,_picName);
+				this.dataArray = CustomFormula.getCustomFormulasByParam(aluPro==null?0:aluPro.id,_picName);
+				//this.aluProDetailArray = AluProDetail.getAluProsById(aluPro==null?0:aluPro.id);
+			}
+			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox verticalGap="2" width="100%" height="100%"  id="main">
+		<mx:HBox width="100%" height="40%" horizontalAlign="center" verticalAlign="middle"
+				 paddingLeft="5" >
+			
+			<mx:HBox height="100%" width="55" borderVisible="true" >
+				<s:Label fontSize="16" text="窗 型 图" maxDisplayedLines="10" width="16" height="100%" verticalAlign="middle" />
+				<mx:VBox height="100%" verticalAlign="middle" paddingRight="5" >
+					<my:VButton id="newBtn" label="创建窗型" click="showCreatePicPanel(event)" width="25" height="70" fontSize="12"/>
+					<my:VButton id="selBtn" label="选择窗型" click="browseHandler()" width="25" height="70" fontSize="12"/>
+					<my:VButton id="addBl" label="添加变量" click="mouseChange(1)" width="25" height="70" fontSize="12" enabled="{picName.text.length>0}"/>
+				</mx:VBox>
+			</mx:HBox>
+			<mx:VBox id="pciHbox" width="100%" height="100%" horizontalAlign="center" verticalAlign="top" backgroundColor="#e5e5e5">
+				<mx:HBox verticalAlign="middle" toolTip="注意：窗型的总宽度、总高度建议分别设置参数为A和B字母">
+					<mx:Label id="picName"/>
+					<mx:LinkButton label="[修改]" click="fixPic()" buttonMode="true" visible="{picName.text!=''}" />
+				</mx:HBox>
+				<mx:Image id="winPic" width="300" height="210" horizontalAlign="center" click="addTextInput(event)" scaleContent="true" maintainAspectRatio="false"/>
+			</mx:VBox>
+		</mx:HBox>
+		<mx:HBox width="100%" height="60%" borderVisible="true"  paddingLeft="5">
+			<mx:HBox height="100%" width="55" borderVisible="true" >
+				<s:Label fontSize="16" text="公 式 列 表" maxDisplayedLines="10" width="16" height="100%" verticalAlign="middle" />
+				<mx:VBox height="100%" verticalAlign="middle" verticalGap="30" paddingRight="5" >
+					
+					<my:VButton label="添加公式" click="add(event)" width="25" height="70" fontSize="12" />
+					<my:VButton label="删除公式" click="del(event)" width="25" height="70" fontSize="12" />
+					
+				</mx:VBox>
+			</mx:HBox>
+			
+			<mx:VBox height="100%" width="100%" horizontalAlign="center" verticalAlign="middle" verticalGap="-1">
+				<mx:HBox width="100%" verticalAlign="middle" borderColor="#87ceeb" borderVisible="true" borderStyle="solid">
+					<mx:Label text="当前型材：" textAlign="left" paddingLeft="4" fontWeight="bold" />
+					<mx:ComboBox id="aluCombox" dataProvider="{aluProArray}" labelField="name" prompt="" width="140" color="red"
+								 selectedIndex="{ArrayCollectionUtil.getIndex(aluPro==null?0:aluPro.id,aluProArray,'id')}" buttonMode="true"
+								 change="aluChange()"/>
+					<s:Spacer width="70"/>
+					<mx:HBox horizontalGap="2" verticalAlign="middle">
+						<mx:TextInput id="txtBefore" width="60"/>
+						<mx:Label text="&#xf122;" width="30" styleName="newMenuFont" color="black" fontSize="16" height="20" 
+								  click="replaceAll()" toolTip="一键替换" buttonMode="true" useHandCursor="true" mouseChildren="false"/>
+						<mx:TextInput id="txtAfter" width="60"/>
+						<mx:Label text="点击箭头替换公式参数，请谨慎操作！"/>
+					</mx:HBox>
+				</mx:HBox>
+				<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" allowMultipleSelection="true" 
+							 editable="true" itemEditEnd="dataGrid_itemEditEndHandler(event)" itemFocusIn="dataGrid_itemFocusInHandler(event)"
+							 allowDragSelection="true" dragMoveEnabled="true" dragEnabled="true" dropEnabled="true">
+					<mx:columns>
+						<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40" editable="false"/>
+						<mx:DataGridColumn dataField="type" headerText="公式类型" textAlign="left" width="80" editable="false">
+							<mx:itemRenderer>
+								<fx:Component>
+									<mx:ComboBox width="100%" height="100%" change="combobox1_changeHandler(event)" selectedIndex="{data.type}">
+										<mx:dataProvider>
+											<s:ArrayCollection>
+												<fx:String>外框</fx:String>
+												<fx:String>内扇</fx:String>
+												<fx:String>玻璃</fx:String>
+												<fx:String>面积</fx:String>
+											</s:ArrayCollection>
+										</mx:dataProvider>
+										<fx:Script>
+											<![CDATA[
+												import mx.events.ListEvent;
+												protected function combobox1_changeHandler(event:ListEvent):void
+												{
+													var index:int=event.target.selectedIndex;
+													data.type=index;
+												}
+												
+											]]>
+										</fx:Script>
+									</mx:ComboBox>
+									
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						
+						<!--<mx:DataGridColumn dataField="materialName" headerText="料名" textAlign="left" width="80"/>-->
+						<mx:DataGridColumn headerText="料名" textAlign="left" width="80" editable="false">
+							<mx:itemRenderer>
+								<fx:Component>
+									<mx:HBox dataChange="hbox1_dataChangeHandler(event)">
+										
+										<my:ComboBoxFilter id="combox" dataSource="{outerDocument.aluProDetailArray}" labelField="name" width="80" focusIn="IME.enabled=true" textAlign="left" 
+														   focusOut="combox_focusOutHandler(event)" changeClearDP="true">
+											
+											<fx:Script>
+												<![CDATA[
+													import mx.events.FlexEvent;
+													
+													protected function hbox1_dataChangeHandler(event:FlexEvent):void
+													{
+														// TODO Auto-generated method stub
+														combox.textInput.text = data.materialName;
+													}
+													
+													protected function combox_focusOutHandler(event:FocusEvent):void
+													{
+														// TODO Auto-generated method stub
+														import entity.AluProDetail;
+														
+														import spark.events.IndexChangeEvent;
+														
+														if(combox.selectedItem==undefined||combox.selectedItem==""||combox.selectedItem==null||!(combox.selectedItem as AluProDetail)){
+															data.materialName=combox.textInput.text;
+														}else{
+															var _item:AluProDetail = combox.selectedItem as AluProDetail;
+															data.materialName = _item.name;
+														}
+													}
+												]]>
+											</fx:Script>
+											
+										</my:ComboBoxFilter>
+									</mx:HBox>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn dataField="tag" headerText=" " textAlign="left" width="50" editable="false">
+							<mx:itemRenderer>
+								<fx:Component>
+									<mx:ComboBox width="100%" height="100%" change="combobox2_changeHandler(event)" selectedItem="{data.tag}">
+										<mx:dataProvider>
+											<s:ArrayCollection>
+												<fx:String>各</fx:String>
+											</s:ArrayCollection>
+										</mx:dataProvider>
+										<fx:Script>
+											<![CDATA[
+												import mx.events.ListEvent;
+												import common.ArrayCollectionUtil;
+												protected function combobox2_changeHandler(event:ListEvent):void
+												{
+													var index:int=event.target.selectedIndex;
+													data.tag=index>-1?"各":"";
+												}
+												
+											]]>
+										</fx:Script>
+									</mx:ComboBox>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn dataField="amount" headerText="数量" textAlign="left" width="60"/>
+						<mx:DataGridColumn dataField="formula" headerText="公式" textAlign="left"/>
+					</mx:columns>
+				</mx:DataGrid>
+				<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" borderColor="#87ceeb" borderVisible="true" borderStyle="solid">
+					<mx:Button label="保存" click="save()" buttonMode="true"/>
+					<mx:Button label="{tagCopy?'复制':'粘贴'}" click="copy()" toolTip="{tagCopy?'复制当前所有公式':'选择其他窗型或型材并粘贴'}" buttonMode="true"/>
+				</mx:HBox>
+				
+			</mx:VBox>
+		</mx:HBox>
+			
+		
+	</mx:VBox>
+</s:TitleWindow>

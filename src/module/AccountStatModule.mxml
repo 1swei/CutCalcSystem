@@ -1,0 +1,295 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Module xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="onComplete(event)"
+		   xmlns:s="library://ns.adobe.com/flex/spark" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:viewStackEffects="org.efflex.mx.viewStackEffects.*"
+		   xmlns:ns="http://code.google.com/p/flexlib/" xmlns:autoComplete="flex.ui.spark.autoComplete.*">
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+		<s:Rotate id="effectRefresh" target="{refreshBtn}" angleBy="90"
+				  applyChangesPostLayout="true" autoCenterTransform="true" />
+		<viewStackEffects:FadeZoom id="effect" transparent="true" duration="300"/>
+		<mx:RadioButtonGroup id="state" selectedValue="0" change="state_changeHandler(event)"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import common.ChineseConvert;
+			import common.DateFormatHelper;
+			
+			import entity.AccountStat;
+			import entity.Customer;
+			import entity.Sell;
+			import entity.SellReport;
+			import mx.collections.ArrayCollection;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			/*↓↓↓↓↓↓↓↓  变量区  ↓↓↓↓↓↓↓↓  */
+			[Bindable]
+			public var amountTotal:Number=0;//应收金额合计
+			[Bindable]
+			public var realAmountTotal:Number=0;//应付金额合计
+			[Bindable]
+			public var smallAmountTotal:Number=0;//抹零合计
+			
+			[Bindable] private var dataArray:ArrayCollection;
+			[Bindable] private var dataArray_pay:ArrayCollection;
+			[Bindable] public var custArray:ArrayCollection;
+			/*↑↑↑↑↑↑↑↑  变量区  ↑↑↑↑↑↑↑↑ */
+			protected function onComplete(event:FlexEvent):void{
+				selectCust();//下拉框方法
+				select();//搜索应收账款
+				viewStackbn.selectedIndex=0;
+			}
+			public function searchFunction(obj:Object):Boolean{
+				var str:String = "";
+				if(obj.hasOwnProperty("name")&&obj["name"]!=null){
+					str = (obj["name"] as String).toLowerCase();
+				}
+				if(str.search(customer.text.toLowerCase())>=0){
+					return true;
+				}else if(ChineseConvert.isChinese(str)
+					&&ChineseConvert.convertString(str).search(customer.text.toLowerCase())>=0){
+					return true;	
+				}else{
+					return false;
+				}	
+			}
+			/**序号自增1*/
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			private function selectCust():void{
+				custArray=Customer.getCustomers();
+			}
+			private function select():void{
+				var obj:Object = new Object();
+				obj.beginDate = beginDate.selectedDate;
+				obj.endDate = endDate.selectedDate;
+				if(state.selectedValue=="0"){
+					obj.state=0;
+					obj.nameText = customer.text;
+					obj.context = context.text;
+				}else{
+					obj.state=1;
+					obj.nameText = context_pay.text;
+					obj.context = context_pay.text;
+				}
+				dataArray=AccountStat.findByParam(obj);
+				calcTotal();
+			}
+			private function calcTotal():void{
+				amountTotal=0;
+				realAmountTotal=0;
+				smallAmountTotal=0;
+				if(dataArray!=null&&dataArray.length>0){
+					var item:AccountStat;
+					for(var i:int=0;i<dataArray.length;i++){
+						item=AccountStat(dataArray.getItemAt(i));
+						amountTotal+=item.amount;
+						realAmountTotal+=item.realAmount;
+						smallAmountTotal+=item.smallAmount;
+					}
+				}
+			}
+			protected function state_changeHandler(event:Event):void
+			{
+				if(state.selectedValue==0){
+					viewStackbn.selectedIndex = 0;
+				}else{
+					viewStackbn.selectedIndex = 1;
+				}
+				select();
+			}
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+				var item:AccountStat = new AccountStat();
+				item.accType=state.selectedValue=="0"?0:1;
+				item.amountType=state.selectedValue=="0"?0:1;
+				item.createTime=DateFormatHelper.Format10(new Date());
+				item.source=0;
+				if(dataArray==null){
+					dataArray = new ArrayCollection();
+				}
+				dataArray.addItem(item);
+			}
+			protected function dataGrid_itemEditEndHandler(event:DataGridEvent):void
+			{
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				var item:AccountStat=event.itemRenderer.data as AccountStat;
+				item[event.dataField] = ti.text;
+				if(event.dataField=="realAmount"||event.dataField=="amount"){
+					if(item.amount>item.realAmount){
+						item.smallAmount=item.amount-item.realAmount;
+					}else{
+						item.smallAmount=0;
+					}
+					calcTotal();
+				}
+				/* var input:Number = Number(ti.text);
+				if(isNaN(input)){
+					event.preventDefault();
+					ti.errorString="输入格式错误";
+					return;
+				} */
+				save(item);
+			}
+			public function save(_item:AccountStat):void{
+				if(_item.id>0){
+					AccountStat.update(_item);
+				}else{
+					var insertId:int = AccountStat.insert(_item);
+					_item.id = insertId;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:VBox width="100%" height="100%" verticalGap="2">
+		<mx:HBox verticalAlign="middle" >
+			<mx:Button label="{state.selectedValue=='0'?'新建收款项':'新建付款项'}" click="button1_clickHandler(event)" buttonMode="true"/>
+			<s:Spacer width="10"/>
+			<mx:RadioButton groupName="state" id="state_r" label="收款" selected="true" value="0" buttonMode="true"/>
+			<mx:RadioButton groupName="state" id="state_p" label="付款" value="1" buttonMode="true"/> 
+			<mx:HBox borderVisible="true" borderColor="0x000000" borderStyle="solid" paddingLeft="2" paddingRight="2" paddingTop="2" paddingBottom="2">
+				<s:Label text="{state.selectedValue=='0'?'应收':'应付'}：{amountTotal}	{state.selectedValue=='0'?'实收':'实付'}：{realAmountTotal}	抹零：{smallAmountTotal}"/>
+			</mx:HBox>
+		</mx:HBox>
+		<mx:ViewStack id="viewStackbn" width="100%" height="100%" creationPolicy="all" selectedIndex="0">
+			<!--收款-->
+			<mx:VBox width="100%" height="100%" hideEffect="effect" showEffect="effect" >
+				<mx:HBox verticalAlign="middle" >
+					<autoComplete:AutoComplete id="customer" labelField="name" width="130" dataProvider="{custArray}"
+											   searchMode="sync" select="select()" prompt="客户"
+											   skinClass="flex.ui.spark.autoComplete.AutoCompleteSkin"
+											   searchFunction="searchFunction" 
+											   emptyString="- 无 -" textAlign="left" />
+					<s:Label text="创建时间："/>
+					<mx:DateField  id="beginDate" selectedDate="{DateFormatHelper.getDateBefore(3)}" 
+								   yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+								   selectableRange="{{ rangeEnd : endDate.selectedDate}}" change="select()" />
+					<s:Label text="至"/>
+					<mx:DateField id="endDate" selectedDate="{new Date()}"
+								  yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+								  selectableRange="{{rangeStart : beginDate.selectedDate}}" change="select()"/>
+					<ns:PromptingTextInput id="context" prompt="综合搜索" enter="select()"/>
+					<mx:Image id="refreshBtn" buttonMode="true" source="@Embed('/img/refresh.png')" click="select()" toolTip="刷新"
+							  mouseOver="effectRefresh.play()" mouseOut="effectRefresh.play()"/>
+				</mx:HBox>
+				<mx:DataGrid id="dataGrid" width="100%" height="100%" dataProvider="{dataArray}" editable="true" itemEditEnd="dataGrid_itemEditEndHandler(event)">
+					<mx:columns>
+						<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="55" editable="false"/>
+						<mx:DataGridColumn headerText="客户" dataField="accName" width="200" editable="false" textAlign="left">
+							<mx:itemRenderer>
+								<fx:Component>
+									<mx:HBox>
+										<s:ComboBox id="bmCombo" dataProvider="{outerDocument.custArray}" labelField="name" skinClass="skins.my.ComboBoxSkin2" selectedItem="{ArrayCollectionUtil.getItem(data.accName,outerDocument.custArray,'name',data.accName)}"
+													mouseOver="bmCombo.openButton.visible=true;" mouseOut="bmCombo.openButton.visible=false;" width="100%" textAlign="left" focusOut="bmCombo_focusOutHandler(event)">
+										</s:ComboBox>
+										<fx:Script>
+											<![CDATA[
+												import common.ArrayCollectionUtil;
+												
+												import entity.AccountStat;
+												import entity.Customer;
+												
+												protected function bmCombo_focusOutHandler(event:FocusEvent):void
+												{
+													// TODO Auto-generated method stub
+													if(bmCombo.selectedItem is Customer){
+														data.accName = bmCombo.selectedItem.name;
+													}else{
+														data.accName = bmCombo.selectedItem==null?"":bmCombo.selectedItem;
+													}
+													outerDocument.save(data as AccountStat);
+												}
+												
+											]]>
+										</fx:Script>
+									</mx:HBox>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="单据号" dataField="code" textAlign="left"/>
+						<mx:DataGridColumn headerText="应收金额" dataField="amount" textAlign="right">
+							<mx:itemEditor>
+								<fx:Component>
+									<mx:TextInput restrict="0-9" />
+								</fx:Component>
+							</mx:itemEditor>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="实收金额" dataField="realAmount" textAlign="right">
+							<mx:itemEditor>
+								<fx:Component>
+									<mx:TextInput restrict="0-9"/>
+									
+								</fx:Component>
+							</mx:itemEditor>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="抹零" dataField="smallAmount" textAlign="right" editable="false" itemRenderer="skins.gridTextColor.AccountStatColorItemRenderer">
+							<mx:itemEditor>
+								<fx:Component>
+									<mx:TextInput restrict="0-9" />
+								</fx:Component>
+							</mx:itemEditor>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="创建时间" dataField="createTime" labelFunction="DateFormatHelper.Format10" editable="false"/>
+						<mx:DataGridColumn headerText="备注" dataField="memo" textAlign="left"/>
+					</mx:columns>
+				</mx:DataGrid>
+			</mx:VBox>
+			<!--付款-->
+			<mx:VBox width="100%" height="100%" hideEffect="effect" showEffect="effect">
+				<mx:HBox verticalAlign="middle" >
+					<s:Label text="创建时间："/>
+					<mx:DateField  id="beginDate_pay" selectedDate="{DateFormatHelper.getDateBefore(3)}" 
+								   yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+								   selectableRange="{{ rangeEnd : endDate_pay.selectedDate}}" change="select()" />
+					<s:Label text="至"/>
+					<mx:DateField id="endDate_pay" selectedDate="{new Date()}"
+								  yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+								  selectableRange="{{rangeStart : beginDate_pay.selectedDate}}" change="select()"/>
+					<ns:PromptingTextInput id="context_pay" prompt="供应商/备注" enter="select()"/>
+					<mx:Image buttonMode="true" source="@Embed('/img/refresh.png')" click="select()" toolTip="刷新"
+							  mouseOver="effectRefresh.play()" mouseOut="effectRefresh.play()"/>
+				</mx:HBox>
+				<mx:DataGrid width="100%" height="100%" dataProvider="{dataArray}" editable="true" itemEditEnd="dataGrid_itemEditEndHandler(event)">
+					<mx:columns>
+						<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="55" editable="false"/>
+						<mx:DataGridColumn headerText="供应商" dataField="accName" width="200" textAlign="left"/>
+						<mx:DataGridColumn headerText="单据号" dataField="code" textAlign="left"/>
+						<mx:DataGridColumn headerText="应付金额" dataField="amount" textAlign="right">
+							<mx:itemEditor>
+								<fx:Component>
+									<mx:TextInput restrict="0-9" />
+								</fx:Component>
+							</mx:itemEditor>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="实付金额" dataField="realAmount" textAlign="right">
+							<mx:itemEditor>
+								<fx:Component>
+									<mx:TextInput restrict="0-9" />
+								</fx:Component>
+							</mx:itemEditor>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="抹零" dataField="smallAmount" textAlign="right" editable="false" itemRenderer="skins.gridTextColor.AccountStatColorItemRenderer">
+							<mx:itemEditor>
+								<fx:Component>
+									<mx:TextInput restrict="0-9" />
+								</fx:Component>
+							</mx:itemEditor>
+						</mx:DataGridColumn>
+						<mx:DataGridColumn headerText="创建时间" dataField="createTime" labelFunction="DateFormatHelper.Format10" editable="false"/>
+						<mx:DataGridColumn headerText="备注" dataField="memo" textAlign="left"/>
+					</mx:columns>
+				</mx:DataGrid>
+			</mx:VBox>
+		</mx:ViewStack>
+		
+	</mx:VBox>
+</mx:Module>

@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="module1_creationCompleteHandler(event)" xmlns:skins="skins.*" xmlns:common="common.*" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%">
+	<fx:Script>
+		<![CDATA[
+			import TitleWindows.InfoDoc;
+			
+			import common.DateFormatHelper;
+			import common.FlexClientConfig;
+			
+			import entity.InfoMsg;
+			import entity.Orders;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			[Bindable]
+			private var str:String = "周";
+			[Bindable]
+			private var total:int = 0;
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			[Bindable]
+			public var dataArraypf:ArrayCollection;
+			[Bindable]
+			public var windowArray:ArrayCollection;
+			
+			private var dbStatement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			private function getOrdersData(str:String):void{
+				this.str=str;
+				staticOrderNum();
+				staticDateArea();
+				staticArea();
+				styleChange();
+			}
+			/*按日期统计订单单数**/
+			private function staticOrderNum():void{
+				total = 0;
+				var result:ArrayCollection = new ArrayCollection();
+				//获取本周
+				var order_datas:ArrayCollection ;
+				var item:Object;
+				var diff:int = 0;
+				var begin:Date ;
+				if(str=="周"||str=="月"){
+					//最近7天   num  date
+					if(str=="周"){
+						diff = 6;
+					}else{
+						diff = 30;
+					}
+					begin = DateFormatHelper.getDateBefore(diff);
+					var end:Date = new Date();
+					order_datas = Orders.getOrdersSum(begin,end);
+					var theDay:Date = begin;
+					for(var i=0;i<=diff;i++){
+						item = new Object();
+						item.date = DateFormatHelper.Format5(theDay);
+						item.num = sumOrder(DateFormatHelper.Format1(theDay),order_datas);
+						//天数+1
+						theDay = DateFormatHelper.getDateAfter(1,theDay);
+						result.addItem(item);
+						total += int(item.num);
+					}
+				}else{
+					//年，查询每月
+					//var d:Date = new Date();
+					var year:String = yearText.text;
+					order_datas = Orders.getOrdersYearSum(year+"");
+					diff = 12;
+					for(var i=1;i<=diff;i++){
+						item = new Object();
+						item.num = sumOrder(year+"-"+(i<=9?("0"+i):i),order_datas);
+						item.date = i+"月";
+						result.addItem(item);
+						total += int(item.num);
+					}
+					
+				}
+				dataArray = result;
+			}
+			/**按日期统计平方数*/
+			private function staticDateArea():void{
+				var result:ArrayCollection = new ArrayCollection();
+				//获取本周
+				var order_datas:ArrayCollection ;
+				var item:Object;
+				var diff:int = 0;
+				var begin:Date ;
+				if(str=="周"||str=="月"){
+					//最近7天   num  date
+					if(str=="周"){
+						diff = 6;
+					}else{
+						diff = 30;
+					}
+					begin = DateFormatHelper.getDateBefore(diff);
+					var end:Date = new Date();
+					order_datas = Orders.getOrdersPfSum(begin,end);
+					var theDay:Date = begin;
+					for(var i=0;i<=diff;i++){
+						item = new Object();
+						item.date = DateFormatHelper.Format5(theDay);
+						item.num = sumOrder(DateFormatHelper.Format1(theDay),order_datas);
+						//天数+1
+						theDay = DateFormatHelper.getDateAfter(1,theDay);
+						result.addItem(item);
+					}
+				}else{
+					//年，查询每月
+					//var d:Date = new Date();
+					var year:String = yearText.text;
+					order_datas = Orders.getOrdersPfYearSum(year+"");
+					diff = 12;
+					for(var i=1;i<=diff;i++){
+						item = new Object();
+						item.num = sumOrder(year+"-"+(i<=9?("0"+i):i),order_datas);
+						item.date = i+"月";
+						result.addItem(item);
+					}
+					
+				}
+				dataArraypf = result;
+			}
+			/**按材料类型统计平方数*/
+			private function staticArea():void{
+				var begin:Date;
+				var end:Date = new Date();
+				if(str=="周"){
+					begin = DateFormatHelper.getDateBefore(6);
+				}else if(str=="月"){
+					begin = DateFormatHelper.getDateBefore(30);
+				}else{
+					begin = DateFormatHelper.parse10(yearText.text+"-01-01 00:00");
+					end = DateFormatHelper.parse10(yearText.text+"-12-31 23:59");
+				}
+				windowArray = Orders.sumStaticArea(begin,end);
+				
+			}
+			
+			//该日期下是否有数据 day YYYY-MM-DD
+			private function sumOrder(day:String,orders:ArrayCollection):String{
+				if(orders!=null){
+					for(var i :int =0;i<orders.length;i++){
+						var data:Object = orders.getItemAt(i) as Object;
+						if(day==data.date){
+							return Number(data.num==null?0:data.num).toFixed(2);
+						}
+					}
+				}
+				return "0";
+			}
+			
+			protected function module1_creationCompleteHandler(event:FlexEvent):void
+			{
+				getOrdersData(str);
+				styleChange();
+			}
+			private function styleChange():void{
+				if(str=="周"){
+					weekCan.setStyle("backgroundColor", FlexClientConfig.getInstance().Theme);
+					monthCan.setStyle("backgroundColor", 0xffffff);
+					yearCan.setStyle("backgroundColor",0xffffff);
+				}else if(str=="月"){
+					weekCan.setStyle("backgroundColor", 0xffffff);
+					monthCan.setStyle("backgroundColor", FlexClientConfig.getInstance().Theme);
+					yearCan.setStyle("backgroundColor",0xffffff);
+				}else{
+					weekCan.setStyle("backgroundColor", 0xffffff);
+					monthCan.setStyle("backgroundColor", 0xffffff);
+					yearCan.setStyle("backgroundColor",FlexClientConfig.getInstance().Theme);
+				}
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "http://www.adobe.com/2006/mxml";
+		mx|AxisRenderer {
+			color: black;
+			font-family: Arial;
+			fontSize: 16;
+			fontWeight: normal;
+		}
+	</fx:Style>
+	<mx:VBox verticalGap="2" width="100%" height="100%">
+		<mx:HBox >
+			<mx:Canvas id="weekCan" borderVisible="true" borderStyle="solid" borderColor="#000000" >
+				<mx:LinkButton label="周" click="getOrdersData('周')" width="50" height="30" buttonMode="true" />
+			</mx:Canvas>
+			<mx:Canvas id="monthCan" borderVisible="true" borderStyle="solid" borderColor="#000000">
+				<mx:LinkButton label="月" click="getOrdersData('月')" width="50" height="30" buttonMode="true" />
+			</mx:Canvas>
+			<mx:Canvas id="yearCan" borderVisible="true" borderStyle="solid" borderColor="#000000">
+				<mx:HBox horizontalGap="2" verticalAlign="middle" horizontalAlign="center">
+					<mx:TextInput id="yearText" text="{new Date().fullYear}" maxChars="4" restrict="0-9" width="50" enter="getOrdersData('年')"/>					
+					<mx:LinkButton label="年" click="getOrdersData('年')" width="50" height="30" buttonMode="true" />
+				</mx:HBox>
+				
+			</mx:Canvas>
+		</mx:HBox>
+		<mx:VBox width="100%" height="100%">
+			<mx:HBox>
+				<mx:LinkButton label="{str}订单数统计：{total}"/>
+			</mx:HBox>
+			<mx:VBox width="100%" height="100%">
+				<mx:HBox width="100%" height="100%">
+					<mx:ColumnChart width="100%" height="100%" showDataTips="true" id="columnChart" dataProvider="{dataArray}">
+						<mx:horizontalAxis>
+							<mx:CategoryAxis dataProvider="{dataArray}" categoryField="date"/>
+						</mx:horizontalAxis>
+						<mx:series>
+							<mx:ColumnSeries xField="date" yField="num" fontSize="16"/>
+						</mx:series>
+					</mx:ColumnChart>
+				</mx:HBox>
+			</mx:VBox>
+		</mx:VBox>
+		<mx:VBox width="100%" height="100%">
+			<mx:HBox>
+				<mx:LinkButton label="{str}平方数统计（日期）"/>
+			</mx:HBox>
+			<mx:VBox width="100%" height="100%">
+				<mx:HBox width="100%" height="100%">
+					<mx:ColumnChart width="100%" height="100%" showDataTips="true" id="columnChart3" dataProvider="{dataArraypf}">
+						<mx:horizontalAxis>
+							<mx:CategoryAxis dataProvider="{dataArraypf}" categoryField="date"/>
+						</mx:horizontalAxis>
+						<mx:series>
+							<mx:ColumnSeries xField="date" yField="num" fontSize="16"/>
+						</mx:series>
+					</mx:ColumnChart>
+				</mx:HBox>
+			</mx:VBox>
+		</mx:VBox>
+		<mx:VBox width="100%" height="100%">
+			<mx:HBox>
+				<mx:LinkButton label="{str}平方数统计（型材）"/>
+			</mx:HBox>
+			<mx:VBox width="100%" height="100%">
+				<mx:HBox width="100%" height="100%">
+					<mx:ColumnChart width="100%" height="100%" showDataTips="true" id="columnChart2" dataProvider="{windowArray}" color="0x323232">
+						<mx:horizontalAxis>
+							<mx:CategoryAxis dataProvider="{windowArray}" categoryField="name"/>
+						</mx:horizontalAxis>
+						<mx:series>
+							<mx:ColumnSeries xField="name" yField="area"/>
+						</mx:series>
+					</mx:ColumnChart>
+				</mx:HBox>
+			</mx:VBox>
+		</mx:VBox>
+	</mx:VBox>
+</s:Module>

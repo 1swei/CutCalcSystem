@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="型材配置" creationComplete="init();"
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="700" height="620" close="PopUpEffect.Hide(this);"
+			   horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" >
+	<fx:Script>
+		<![CDATA[
+			import common.DataCmdEvent;
+			import common.DateFormatHelper;
+			
+			import entity.AluPro;
+			import entity.AluProDetail;
+			import entity.CustomFormula;
+			import entity.GlassSizeSet;
+			import entity.OrderDetails;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			
+			[Bindable]
+			public var dataArrayAlus:ArrayCollection;
+			[Bindable]
+			public var tagCopy:Boolean=true;//复制
+			private var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			public static const REFRESH:String="REFRESH_ALUPRO_DATA";
+			public function init():void
+			{
+				this.dataArray=AluPro.getAluPros();
+			}
+			
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			private function indexLabelFunction2(obj:Object,col:DataGridColumn):String{
+				if(dataArrayAlus!=null&&dataArrayAlus.length>0){
+					return ""+( dataArrayAlus.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			protected function modify():void
+			{
+				showDetailPanel(dataGridAlu.selectedItem.id);
+			}
+			private function showDetailPanel(id:int):void{
+				var panel:AluProDoc=new AluProDoc();
+				panel.setData(id);
+				panel.dbStatement = statement;
+				panel.addEventListener(REFRESH,function(e:Event):void{
+					init();
+				});
+				PopUpEffect.Show(panel,this.parentApplication as DisplayObject);
+			}
+			public function deleteDate():void{
+				Alert.show("删除后数据不可恢复，且该型材下保存的公式都被删除，是否继续？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler);
+			}
+			private function alertCloseHandler(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					var aluProId:int=dataGridAlu.selectedItem.id;
+					
+					if(OrderDetails.getOrderDetailsByAluProId(aluProId).length>0){
+						Alert.show("该型材已经开单，为了不影响数据显示，请删除对应订单后再进行操作！","提示");
+						return;
+					}
+					
+					AluPro.detele(aluProId);//删主表
+					AluProDetail.deteleByAluId(aluProId);//删明细
+					CustomFormula.deletedByAluProId(aluProId);//删公式
+					
+					dataArray.removeItemAt(dataArray.getItemIndex(dataGridAlu.selectedItem));
+					dataArrayAlus.removeAll();
+				}
+			}
+			protected function createAluPro():void
+			{
+				var item:AluPro = new AluPro();
+				if(dataArray==null){
+					dataArray=new ArrayCollection();
+				}
+				dataArray.addItem(item);
+			}
+			protected function dataGrid_itemEditEndHandler(event:DataGridEvent):void
+			{
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				var item:AluPro=dataGridAlu.selectedItem as AluPro;
+				item[event.dataField] = ti.text;
+				//这个方法不能刷新dataArray 不然会执行2次
+				if(item.id==0){//插入并回写id
+					item.id=AluPro.insert(item);
+				}else{
+					AluPro.update_name(item);
+				}
+				
+			}
+			protected function dataGridAlus_itemEditEndHandler(event:DataGridEvent):void
+			{
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				var item:AluProDetail=dataGridAlus.selectedItem as AluProDetail;
+				item[event.dataField] = ti.text;
+//				if(event.dataField=="name"){
+//					item.name=text;
+//				}else if(event.dataField=="unitWeight"){
+//					item.unitWeight=text;
+//				}
+				if(item.id==0){//插入并回写id
+					item.id=AluProDetail.insert(item);
+				}else{
+					AluProDetail.update(item);
+				}
+				
+			}
+			
+			protected function dataGridAlu_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+				var aluProItem:AluPro=dataGridAlu.selectedItem as AluPro;
+				if(aluProItem==null){
+					return;
+				}
+				this.dataArrayAlus = AluProDetail.getAluProsById(aluProItem.id);
+			}
+			
+			protected function addAluProDetails(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var aluProItem:AluPro=dataGridAlu.selectedItem as AluPro;
+				if(aluProItem==null||aluProItem.id==0){
+					Alert.show("请先选择左边的型材型号，再添加材料名称！","提示");
+					return;
+				}
+				var item:AluProDetail = new AluProDetail();
+				if(dataArrayAlus==null){
+					dataArrayAlus=new ArrayCollection();
+				}
+				item.aluProId=aluProItem.id;
+				dataArrayAlus.addItem(item);
+			}
+			
+			protected function delAluProDetails(event:MouseEvent):void
+			{
+				AluProDetail.detele(dataGridAlus.selectedItem.id);
+				dataArrayAlus.removeItemAt(dataArrayAlus.getItemIndex(dataGridAlus.selectedItem));
+			}
+			
+			[Bindable]
+			public var copyArrayCollection:ArrayCollection ;//复制集合
+			protected function copyAluProDetails(event:MouseEvent):void
+			{
+				if(tagCopy){//复制
+					if(dataArrayAlus==null||dataArrayAlus.length==0){
+						Alert.show("没有可复制的数据","提示");
+						return;
+					}
+					copyArrayCollection = new ArrayCollection();
+					copyArrayCollection.addAll(dataArrayAlus);
+					tagCopy=false;
+				}else{//粘贴
+					if(copyArrayCollection==null||copyArrayCollection.length==0){
+						Alert.show("没有可粘贴的数据","提示");
+						return;
+					}
+					var selectedAlupro:AluPro = dataGridAlu.selectedItem as AluPro;
+					if(copyArrayCollection.getItemAt(0).aluProId==selectedAlupro.id){
+						Alert.show("不能粘贴在复制的型材下","提示");
+						return;
+					}
+					if(selectedAlupro==null||selectedAlupro.id==0||copyArrayCollection==null||copyArrayCollection.length==0){
+						Alert.show("粘贴失败","提示");
+						return;
+					}
+					
+					for each(var aluproDetail:AluProDetail in copyArrayCollection){
+						aluproDetail.aluProId = selectedAlupro.id;
+						AluProDetail.insert(aluproDetail);
+					}
+					this.dataArrayAlus.addAll(copyArrayCollection);
+					copyArrayCollection.removeAll();
+					tagCopy=true;
+					
+				}	
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:HDividedBox width="100%" height="100%">
+		
+	
+		<mx:VBox verticalGap="2" width="50%" height="100%">
+			<mx:HBox width="100%" paddingLeft="2" paddingTop="2" paddingBottom="2" verticalAlign="middle" horizontalGap="4" >
+				<mx:Button label="新建型材" height="24" click="createAluPro()"/>
+				<mx:Button label="推拉窗配置" height="24" click="modify()" enabled="{dataGridAlu.selectedItem!=null}"/>
+				<mx:Button label="删除" height="24" width="50" click="deleteDate()" enabled="{dataGridAlu.selectedItem!=null}"/>
+			</mx:HBox>
+			<mx:DataGrid id="dataGridAlu" dataProvider="{dataArray}" width="100%" height="100%" 
+						 editable="true" itemEditEnd="dataGrid_itemEditEndHandler(event)" click="dataGridAlu_clickHandler(event)">
+				<mx:columns>
+					<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40" editable="false"/>
+					<mx:DataGridColumn dataField="name" headerText="材料型号" textAlign="left" />
+					<mx:DataGridColumn dataField="loss" headerText="损耗" textAlign="left" >
+						<mx:itemEditor>
+							<fx:Component>
+								<mx:TextInput restrict="0-9." toolTip="1.13/1.18"/>
+							</fx:Component>
+						</mx:itemEditor>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn dataField="price" headerText="单价" textAlign="left" >
+						<mx:itemEditor>
+							<fx:Component>
+								<mx:TextInput restrict="0-9." toolTip="23.5"/>
+							</fx:Component>
+						</mx:itemEditor>
+					</mx:DataGridColumn>
+					<!--<mx:DataGridColumn dataField="bz" headerText="备注" textAlign="left" width="100" />-->
+					<!--<mx:DataGridColumn dataField="state" width="55" headerText="状态" >
+						<mx:itemRenderer>
+							<fx:Component>
+								<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" dataChange="zty(data)">				
+									<mx:Image id="pic" />
+									<fx:Script>
+										<![CDATA[
+											import entity.AluPro;
+											
+											import mx.core.FlexGlobals;
+											private function zty(u:Object):void{
+												var data:AluPro=u as AluPro;
+												if(data!=null){
+													if(data.state=="Y"){
+														pic.source = FlexGlobals.topLevelApplication.YES_IMG;
+														pic.toolTip = "已启用";
+													}else{
+														pic.source = FlexGlobals.topLevelApplication.NO_IMG;
+														pic.toolTip = "已停用";
+													}
+												}
+											}
+										]]>
+									</fx:Script>
+								</mx:HBox>
+							</fx:Component>
+						</mx:itemRenderer>	
+					</mx:DataGridColumn>-->
+				</mx:columns>
+			</mx:DataGrid>
+			<mx:HBox>
+				<mx:Label text="注：本页面若改动参数，需要重新打开订单模块！" color="blue"/>
+			</mx:HBox>
+		</mx:VBox>
+		<mx:VBox height="100%" width="50%" verticalGap="2">
+			<mx:HBox width="100%" paddingLeft="2" paddingTop="2" paddingBottom="2" verticalAlign="middle" horizontalGap="4" >
+				<mx:Label text="型材明细"/>
+				<mx:Button label="添加" height="24" width="50" click="addAluProDetails(event)" />
+				<mx:Button label="{tagCopy?'复制':'粘贴'}" height="24" width="50" click="copyAluProDetails(event)" />
+				<mx:Button label="删除" height="24" width="50" click="delAluProDetails(event)" enabled="{dataGridAlus.selectedItem!=null}"/>
+			</mx:HBox>
+			<mx:DataGrid id="dataGridAlus" dataProvider="{dataArrayAlus}" width="100%" height="100%" 
+						 editable="true" itemEditEnd="dataGridAlus_itemEditEndHandler(event)">
+				<mx:columns>
+					<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction2" width="40" editable="false"/>
+					<mx:DataGridColumn dataField="name" headerText="材料名称" textAlign="left" />
+					<mx:DataGridColumn dataField="unitWeight" headerText="单玻：kg/m" textAlign="left" >
+						<mx:itemEditor>
+							<fx:Component>
+								<mx:TextInput restrict="0-9." toolTip="单玻：每米多少公斤，用于计算成本"/>
+							</fx:Component>
+						</mx:itemEditor>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn dataField="unitWeightDouble" headerText="双玻：kg/m" textAlign="left" >
+						<mx:itemEditor>
+							<fx:Component>
+								<mx:TextInput restrict="0-9." toolTip="双玻：每米多少公斤，用于计算成本"/>
+							</fx:Component>
+						</mx:itemEditor>
+					</mx:DataGridColumn>
+				</mx:columns>
+			</mx:DataGrid>
+		</mx:VBox>
+	</mx:HDividedBox>
+</s:TitleWindow>

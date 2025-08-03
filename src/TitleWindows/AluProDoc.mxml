@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="型材配置" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="500" close="close()"
+		 horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" >
+	<fx:Declarations>
+		<mx:RadioButtonGroup id="state" selectedValue="{item==null?'Y':item.state}" change="item.state=String(state.selectedValue);"/>
+		<mx:RadioButtonGroup id="type" selectedValue="{item==null?0:item.type}" change="item.type=int(type.selectedValue);"/>
+	</fx:Declarations>
+	<s:layout>
+		<s:VerticalLayout paddingBottom="5" paddingLeft="5" paddingRight="5" paddingTop="5"/>
+	</s:layout>
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			
+			import entity.AluPro;
+			import entity.GlassSizeSet;
+			
+			import mx.binding.utils.ChangeWatcher;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			
+			import skins.PopUpEffect;
+			[Bindable]
+			public var edit:Boolean = false;
+			[Bindable]
+			public var item:AluPro;
+			[Bindable]
+			public var item_glass:GlassSizeSet;
+			public var dbStatement:SQLStatement;
+			public function setData(id:int):void{
+				var _item:AluPro ;
+				if(id==0){
+					_item= new AluPro();
+				}else{
+					_item= AluPro.getAluProById(id);
+				}
+				//先根据配置id获取一下玻璃配置参数，没有就new一个
+				var _item_glass:GlassSizeSet=GlassSizeSet.getGlassSizeSetByAluProId(id);
+				if(_item_glass==null){
+					_item_glass = new GlassSizeSet();
+				}
+				this.item = _item;
+				this.item_glass = _item_glass;
+			}
+			protected function save():void
+			{
+				if(item.name==null||item.name==""){
+					Alert.show("请输入型材名称！","提示");
+					return;
+				}
+				if(item.id==0){
+					AluPro.insert(item);
+				}else{
+					AluPro.update(item,item_glass);
+				}
+				close();
+				dispatchEvent(new Event(AluProfilePanel.REFRESH));
+			}
+			private function close():void{
+				PopUpEffect.Hide(this);
+			}
+			
+			protected function lock():void
+			{
+				// TODO Auto-generated method stub
+				if(edit){
+					edit=false;
+				}else{
+					edit=true;
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:VBox width="100%" height="600" horizontalAlign="left" verticalAlign="middle" paddingLeft="10" verticalScrollPolicy="on">
+		
+		<mx:FormItem label="型材名称" indicatorGap="2" labelWidth="150" textAlign="left" >
+			<skins:BindTextInput data="{item}" dataField="name" width="220" text="{item.name}" />
+		</mx:FormItem>
+		<mx:HBox width="100%" horizontalAlign="center" horizontalGap="2">
+			<mx:RadioButton groupName="type" label="推拉窗料" value="0" width="85"/>
+			<!--<mx:RadioButton groupName="type" label="平开窗料" value="1" width="85"/>
+			<mx:RadioButton groupName="type" label="平开门料" value="2" width="85" />-->
+			<mx:CheckBox id="zj" label="外框组角" selected="{item.isZJ==1}" change="item.isZJ=zj.selected?1:0;"/>
+		</mx:HBox>
+		<mx:HBox>
+			<mx:FormItem textAlign="left" label="中挺 - " indicatorGap="2" labelWidth="150">
+				<skins:BindTextInput data="{item}" dataField="zhongTingXS" text="{item.zhongTingXS}" width="50" restrict="0-9-." />
+			</mx:FormItem>
+		</mx:HBox>
+		<!--非组角推拉窗配置-->
+		<mx:VBox visible="{item.type==0}" includeInLayout="{item.type==0}" verticalAlign="middle" horizontalAlign="left" >
+			<mx:FormItem textAlign="left" label="上下滑 - " indicatorGap="2" labelWidth="150">
+				<skins:BindTextInput data="{item}" dataField="shangXiaHuaXS" width="50" text="{item.shangXiaHuaXS}"  restrict="0-9-." />
+			</mx:FormItem>
+			
+			<mx:FormItem textAlign="left" label="上下方(2扇) - " indicatorGap="2" labelWidth="150">
+				<skins:BindTextInput data="{item}" dataField="shangXiaFang2XS" width="50" text="{item.shangXiaFang2XS}"  restrict="0-9-." />
+			</mx:FormItem>
+			<mx:HBox>
+				<mx:FormItem textAlign="left" label="上下方(3扇) - " indicatorGap="2" labelWidth="150">
+					<skins:BindTextInput data="{item}" dataField="shangXiaFang3XS" width="50" text="{item.shangXiaFang3XS}"  restrict="0-9-." />
+				</mx:FormItem>
+				<mx:FormItem textAlign="left" label="带收口 - " indicatorGap="2" >
+					<skins:BindTextInput data="{item}" dataField="shangXiaFang3XS_SK" width="50" text="{item.shangXiaFang3XS_SK}"  restrict="0-9-." />
+				</mx:FormItem>
+			</mx:HBox>
+			<mx:FormItem textAlign="left" label="上下方(4扇) - " indicatorGap="2" labelWidth="150">
+				<skins:BindTextInput data="{item}" dataField="shangXiaFang4XS" width="50" text="{item.shangXiaFang4XS}"  restrict="0-9-." />
+			</mx:FormItem>
+			<mx:FormItem textAlign="left" label="上下方(6扇) - " indicatorGap="2" labelWidth="150">
+				<skins:BindTextInput data="{item}" dataField="shangXiaFang6XS" width="50" text="{item.shangXiaFang6XS}"  restrict="0-9-." />
+			</mx:FormItem>
+			
+			
+			<!--内扇高度:光勾齐,外框组角的时候,没有光勾齐长短之分.统一减,用字段 ggqMaxXS-->
+			<mx:FormItem textAlign="left" label="高 - " indicatorGap="2" labelWidth="150" visible="{item.isZJ==1}" includeInLayout="{item.isZJ==1}">
+				<skins:BindTextInput data="{item}" dataField="ggqMaxXS" width="50" text="{item.ggqMaxXS}"  restrict="0-9-." />
+			</mx:FormItem>
+			<!--内扇高度:光勾齐,外框不组角的时候,才有光勾齐长短之分.-->
+			<mx:VBox horizontalAlign="left" verticalAlign="middle" verticalGap="4" visible="{item.isZJ==0}" includeInLayout="{item.isZJ==0}">
+				<!--没有固定的光勾企-->
+				<mx:Canvas width="450" left="5">
+					<mx:VBox top="11" borderVisible="true" 
+							 borderColor="#87CEEB" borderStyle="inset" 
+							 cornerRadius="4" width="100%"
+							 horizontalAlign="center"
+							 paddingTop="5" paddingBottom="5">
+						<mx:HBox>
+							<mx:FormItem textAlign="left" label="光勾企(长) - " indicatorGap="2" >
+								<skins:BindTextInput data="{item}" dataField="ggqMaxXS" width="50" text="{item.ggqMaxXS}"  restrict="0-9-." />
+							</mx:FormItem>
+							<mx:FormItem textAlign="left" label="(短) - " indicatorGap="2">
+								<skins:BindTextInput data="{item}" dataField="ggqMinXS" width="50" text="{item.ggqMinXS}"  restrict="0-9-." />
+							</mx:FormItem>
+						</mx:HBox>
+						<mx:HBox>
+							<mx:FormItem textAlign="left" label="高低下滑：光勾企(长) - " indicatorGap="2" >
+								<skins:BindTextInput data="{item}" dataField="ggqMaxPSPXGD" width="50" text="{item.ggqMaxPSPXGD}"  restrict="0-9-." />
+							</mx:FormItem>
+							<mx:FormItem textAlign="left" label="(短) - " indicatorGap="2">
+								<skins:BindTextInput data="{item}" dataField="ggqMinPSPXGD" width="50" text="{item.ggqMinPSPXGD}"  restrict="0-9-." />
+							</mx:FormItem>
+						</mx:HBox>
+					</mx:VBox>
+					<mx:HBox left="10" backgroundColor="#ADCFFE" styleName="bkBorder" top="0">
+						<s:Label text="平上平下" paddingLeft="3" paddingRight="3" paddingTop="1" paddingBottom="1" />
+					</mx:HBox>
+				</mx:Canvas>
+				<!--平上固下光勾企-->
+				<mx:Canvas width="450" left="5">
+					<mx:HBox top="11" borderVisible="true" 
+							 borderColor="#87CEEB" borderStyle="inset" 
+							 cornerRadius="4" width="100%"
+							 horizontalAlign="center"
+							 paddingTop="5" paddingBottom="5">
+						<mx:FormItem textAlign="left" label="光勾企(长) - " indicatorGap="2">
+							<skins:BindTextInput data="{item}" dataField="ggqMaxGXXS" width="50" text="{item.ggqMaxGXXS}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="(短) - " indicatorGap="2" >
+							<skins:BindTextInput data="{item}" dataField="ggqMinGXXS" width="50" text="{item.ggqMinGXXS}"  restrict="0-9-." />
+						</mx:FormItem>
+					</mx:HBox>
+					<mx:HBox left="10" backgroundColor="#ADCFFE" styleName="bkBorder" top="0">
+						<s:Label text="平上固下" paddingLeft="3" paddingRight="3" paddingTop="1" paddingBottom="1" />
+					</mx:HBox>
+				</mx:Canvas>
+				<!--固上平下光勾企-->
+				<mx:Canvas width="450" left="5">
+					<mx:VBox top="11" borderVisible="true" 
+							 borderColor="#87CEEB" borderStyle="inset" 
+							 cornerRadius="4" width="100%"
+							 horizontalAlign="center"
+							 paddingTop="5" paddingBottom="5">
+						<mx:HBox>
+							<mx:FormItem textAlign="left" label="光勾企(长) - " indicatorGap="2">
+								<skins:BindTextInput data="{item}" dataField="ggqMaxGSXS" width="50" text="{item.ggqMaxGSXS}"  restrict="0-9-." />
+							</mx:FormItem>
+							<mx:FormItem textAlign="left" label="(短) - " indicatorGap="2">
+								<skins:BindTextInput data="{item}" dataField="ggqMinGSXS" width="50" text="{item.ggqMinGSXS}"  restrict="0-9-." />
+							</mx:FormItem>
+						</mx:HBox>
+						<mx:HBox>
+							<mx:FormItem textAlign="left" label="高低下滑：光勾企(长) - " indicatorGap="2" >
+								<skins:BindTextInput data="{item}" dataField="ggqMaxGSPXGD" width="50" text="{item.ggqMaxGSPXGD}"  restrict="0-9-." />
+							</mx:FormItem>
+							<mx:FormItem textAlign="left" label="(短) - " indicatorGap="2">
+								<skins:BindTextInput data="{item}" dataField="ggqMinGSPXGD" width="50" text="{item.ggqMinGSPXGD}"  restrict="0-9-." />
+							</mx:FormItem>
+						</mx:HBox>
+					</mx:VBox>
+					<mx:HBox left="10" backgroundColor="#ADCFFE" styleName="bkBorder" top="0">
+						<s:Label text="固上平下" paddingLeft="3" paddingRight="3" paddingTop="1" paddingBottom="1" />
+					</mx:HBox>
+				</mx:Canvas>
+				<!--固上固下光勾企-->
+				<mx:Canvas width="450" left="5">
+					<mx:HBox top="11" borderVisible="true" 
+							 borderColor="#87CEEB" borderStyle="inset" 
+							 cornerRadius="4" width="100%"
+							 horizontalAlign="center"
+							 paddingTop="5" paddingBottom="5">
+						<mx:FormItem textAlign="left" label="光勾企(长) - " indicatorGap="2">
+							<skins:BindTextInput data="{item}" dataField="ggqMaxQGXS" width="50" text="{item.ggqMaxQGXS}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="(短) - " indicatorGap="2">
+							<skins:BindTextInput data="{item}" dataField="ggqMinQGXS" width="50" text="{item.ggqMinQGXS}"  restrict="0-9-." />
+						</mx:FormItem>
+					</mx:HBox>
+					<mx:HBox left="10" backgroundColor="#ADCFFE" styleName="bkBorder" top="0">
+						<s:Label text="固上固下" paddingLeft="3" paddingRight="3" paddingTop="1" paddingBottom="1" />
+					</mx:HBox>
+				</mx:Canvas>
+			</mx:VBox>
+			<!--纯固定,外框横料算法-->
+			<mx:Canvas width="450" left="5">
+				<mx:HBox top="11" borderVisible="true" 
+						 borderColor="#87CEEB" borderStyle="inset" 
+						 cornerRadius="4" width="100%"
+						 horizontalAlign="center"
+						 paddingTop="5" paddingBottom="5">
+					<mx:FormItem textAlign="left" label="横料 - " indicatorGap="2">
+						<skins:BindTextInput data="{item}" dataField="hengLiaoXS" width="50" text="{item.hengLiaoXS}"  restrict="0-9-." />
+					</mx:FormItem>
+				</mx:HBox>
+				<mx:HBox left="10" backgroundColor="#ADCFFE" styleName="bkBorder" top="0">
+					<s:Label text="纯固定" paddingLeft="3" paddingRight="3" paddingTop="1" paddingBottom="1" />
+				</mx:HBox>
+			</mx:Canvas>
+			
+		</mx:VBox>
+		<!--压条-->
+		<mx:Canvas width="450" left="5">
+			<mx:HBox top="11" borderVisible="true" 
+					 borderColor="#87CEEB" borderStyle="inset" 
+					 cornerRadius="4" width="100%"
+					 horizontalAlign="center"
+					 paddingTop="5" paddingBottom="5">
+				<mx:VBox verticalAlign="middle">
+					<mx:HBox>
+						<mx:FormItem textAlign="left" label="固定压条(横) - " indicatorGap="2" >
+							<skins:BindTextInput data="{item}" dataField="yaTiaoW" width="50" text="{item.yaTiaoW}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="压条(竖) - " indicatorGap="2" >
+							<skins:BindTextInput data="{item}" dataField="yaTiaoH" width="50" text="{item.yaTiaoH}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="带窗(竖) - " indicatorGap="2" >
+							<skins:BindTextInput data="{item}" dataField="yaTiaoH_C" width="50" text="{item.yaTiaoH_C}"  restrict="0-9-." />
+						</mx:FormItem>
+					</mx:HBox>
+					<mx:HBox>
+						<mx:FormItem textAlign="left" label="内扇压条(横) - " indicatorGap="2" >
+							<skins:BindTextInput data="{item}" dataField="yaTiaoW_N" width="50" text="{item.yaTiaoW_N}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="压条(竖) - " indicatorGap="2" >
+							<skins:BindTextInput data="{item}" dataField="yaTiaoH_N" width="50" text="{item.yaTiaoH_N}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="压条(宽)" indicatorGap="10" >
+							<skins:BindTextInput data="{item}" dataField="yaTiao" width="50" text="{item.yaTiao}"  restrict="0-9-." />
+						</mx:FormItem>
+					</mx:HBox>
+				</mx:VBox>
+			</mx:HBox>
+			<mx:HBox left="10" backgroundColor="#ADCFFE" styleName="bkBorder" top="0">
+				<s:Label text="压条" paddingLeft="3" paddingRight="3" paddingTop="1" paddingBottom="1" />
+			</mx:HBox>
+		</mx:Canvas>
+		
+		<mx:Canvas width="450" left="5" visible="{item.type!=2}" includeInLayout="{item.type!=2}">
+			<mx:HBox top="11" borderVisible="true" 
+					 borderColor="#87CEEB" borderStyle="inset" 
+					 cornerRadius="4" width="100%"
+					 horizontalAlign="center"
+					 paddingTop="5" paddingBottom="5">
+				<mx:VBox verticalAlign="middle">
+					<mx:FormItem textAlign="left" label="高度(光勾企) - " indicatorGap="2">
+						<skins:BindTextInput data="{item_glass}" dataField="heigth_in" width="50" text="{item_glass.heigth_in}"  restrict="0-9-." />
+					</mx:FormItem>
+					<mx:FormItem textAlign="left" label="宽度(上下方) - " indicatorGap="2">
+						<skins:BindTextInput data="{item_glass}" dataField="width_in" width="50" text="{item_glass.width_in}"  restrict="0-9-." />
+					</mx:FormItem>
+				</mx:VBox>
+			</mx:HBox>
+			<mx:HBox left="10" backgroundColor="#ADCFFE" styleName="bkBorder" top="0">
+				<s:Label text="内扇玻璃" paddingLeft="3" paddingRight="3" paddingTop="1" paddingBottom="1" />
+			</mx:HBox>
+		</mx:Canvas>
+		
+		<mx:Canvas width="450" left="5">
+			<mx:HBox top="11" borderVisible="true" 
+					 borderColor="#87CEEB" borderStyle="inset" 
+					 cornerRadius="4" width="100%"
+					 horizontalAlign="center"
+					 paddingTop="5" paddingBottom="5">
+				<mx:VBox verticalAlign="middle" horizontalAlign="right">
+					<mx:HBox verticalAlign="middle" horizontalGap="1" >
+						<mx:FormItem textAlign="left" label="高度缩尺 - " indicatorGap="2" >
+							<skins:BindTextInput data="{item_glass}" dataField="heigth_stc_xs" width="35" text="{item_glass.heigth_stc_xs}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="宽度缩尺 - " indicatorGap="1" >
+							<skins:BindTextInput data="{item_glass}" dataField="width_stc_xs" width="35" text="{item_glass.width_stc_xs}"  restrict="0-9-." />
+						</mx:FormItem>
+					</mx:HBox>
+					<mx:HBox verticalAlign="middle" horizontalGap="1">
+						<mx:FormItem textAlign="left" label="中挺" indicatorGap="1" >
+							<skins:BindTextInput data="{item_glass}" dataField="glass_zt" width="35" text="{item_glass.glass_zt}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="边封" indicatorGap="1" >
+							<skins:BindTextInput data="{item_glass}" dataField="glass_bf" width="35" text="{item_glass.glass_bf}"  restrict="0-9-." />
+						</mx:FormItem>
+						<mx:FormItem textAlign="left" label="固定" indicatorGap="2" >
+							<skins:BindTextInput data="{item_glass}" dataField="glass_gd" width="35" text="{item_glass.glass_gd}"  restrict="0-9-." />
+						</mx:FormItem>
+					</mx:HBox>
+				</mx:VBox>
+			</mx:HBox>
+			<mx:HBox left="10" backgroundColor="#ADCFFE" styleName="bkBorder" top="0">
+				<s:Label text="固定玻璃" paddingLeft="3" paddingRight="3" paddingTop="1" paddingBottom="1" />
+			</mx:HBox>
+		</mx:Canvas>
+		<mx:HBox width="100%" horizontalAlign="center" horizontalGap="2" >
+			<mx:RadioButton groupName="state" label="启用" value="Y" width="85"/>
+			<mx:RadioButton groupName="state" label="停用" value="N" width="85"/>
+		</mx:HBox>
+	</mx:VBox>
+	<mx:HBox width="100%" horizontalAlign="center">
+		<!--<mx:Button label="{edit?'锁定':'解锁'}" click="lock()" buttonMode="true" toolTip="解锁后才能编辑本页"/>-->
+		<mx:Button label="保存" click="save()" buttonMode="true"/>
+	</mx:HBox>
+</s:TitleWindow>

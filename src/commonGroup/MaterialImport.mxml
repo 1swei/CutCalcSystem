@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--此框为通用组件,并不支持弹出-->
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="oncomplete(event)"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="500" height="450" xmlns:ns="http://code.google.com/p/flexlib/">
+	<fx:Script>
+		<![CDATA[
+			import common.ArrayCollectionUtil;
+			import common.CopyUtil;
+			import common.DataCmdEvent;
+			
+			import entity.Material;
+			import entity.MaterialType;
+			
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.remoting.RemoteObject;
+			
+			import util.TreeUtil;
+			[Bindable]
+			private var materialTreeTypes:ArrayCollection;//自定义类型
+			[Bindable]
+			private var materials:ArrayCollection;//物料集合
+			[Bindable]
+			private var selectedMtl:ArrayCollection=new ArrayCollection;//预选集合
+			[Bindable]
+			private var dataArray:ArrayCollection;
+			[Bindable]
+			private var selectedType:MaterialType;//tree当前选中的类型
+			[Bindable]
+			private var materialAllTypes:ArrayCollection;
+			public static const IMPORT:String="MATERIAL_IMPORT";
+			protected function oncomplete(event:FlexEvent):void{
+				initType();
+				//initMaterials();第一次打开默认不显示物料
+			}
+			var childMenu:ArrayCollection;
+			private function initMaterials():void{
+				var obj:Object = new Object();
+				obj.typeId = tree.selectedItem==null?0:tree.selectedItem.id;
+				obj.showNoUsing = false;
+				obj.context = context.text;
+				if(obj.typeId>0){//根据类别筛选
+					childMenu = new ArrayCollection();
+					var allTypes:ArrayCollection = CopyUtil.clone(materialAllTypes) as ArrayCollection;
+					allTypes=appendID(allTypes,obj.typeId);
+					allTypes.addItem(obj.typeId);
+					obj.typeIds = allTypes;
+				}
+				materials=Material.findByParam(obj);
+			}
+			public function appendID(menuList:ArrayCollection, pid:int):ArrayCollection{
+				
+				for(var i:int;i<menuList.length;i++){
+					//遍历出父id等于参数的id，add进子节点集合
+					if(menuList[i].parentId==pid){
+						//递归遍历下一级
+						appendID(menuList,menuList[i].id);
+						childMenu.addItem(menuList[i].id);
+					}
+				}
+				return childMenu;
+			}
+			private function initType():void{
+				materialTreeTypes = MaterialType.findAll(false);
+				materialAllTypes = materialTreeTypes;
+				materialTreeTypes = MaterialType.buildTree(materialTreeTypes, 0);
+				
+				TreeUtil.expandTree(tree);
+				selectedType=null;
+			}
+			
+			protected function tree_changeHandler(event:ListEvent):void
+			{
+				selectedType=MaterialType(event.itemRenderer.data);
+				initMaterials();
+			}
+			
+			
+			protected function tree_itemClickHandler(event:ListEvent):void
+			{
+				// TODO Auto-generated method stub
+				/* var item:Object = Tree(event.currentTarget).selectedItem;
+				if (tree.dataDescriptor.isBranch(item)) {
+				tree.expandItem(item, !tree.isItemOpen(item), true);
+				} */
+			}
+			private function valueLabelFunction(obj:Object,col:DataGridColumn):String{
+				return obj.brand+obj.name+obj.spec;
+			}
+			public function importMtl(mtl:Material):void{
+				this.dispatchEvent(new DataCmdEvent(IMPORT,mtl));
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox width="100%" height="100%" paddingTop="2" paddingBottom="2" verticalAlign="middle">
+		<mx:HDividedBox width="100%" height="100%">
+			<mx:VBox width="160" height="100%" >
+				<mx:Tree id="tree" width="100%" height="100%" dataProvider="{materialTreeTypes}" labelField="name" 
+						 showRoot="true" change="tree_changeHandler(event)" itemClick="tree_itemClickHandler(event)" textAlign="left"/>
+			</mx:VBox>
+			<mx:VBox width="100%" height="100%">
+				<mx:HBox>
+					<ns:PromptingTextInput id="context" prompt="综合搜索" enter="initMaterials()"/>
+				</mx:HBox>
+				<mx:DataGrid id="dataGrid" width="100%" height="100%" dataProvider="{materials}" >
+					<mx:columns>
+						<mx:DataGridColumn headerText="名称" dataField="name" labelFunction="valueLabelFunction" width="150" textAlign="left"/>
+						<mx:DataGridColumn headerText="单位" dataField="unit" width="50"/>
+						<mx:DataGridColumn headerText="单价"  dataField="price" width="55" textAlign="right"/>
+						<mx:DataGridColumn headerText="操作">
+							<mx:itemRenderer>
+								<fx:Component>
+									<mx:HBox horizontalAlign="center">
+										<fx:Script>
+											<![CDATA[
+												import entity.Material;
+											]]>
+										</fx:Script>
+										<mx:Button label="选择" click="outerDocument.importMtl(Material(data))" width="55"/>
+									</mx:HBox>
+								</fx:Component>
+							</mx:itemRenderer>
+						</mx:DataGridColumn>
+					</mx:columns>
+				</mx:DataGrid>
+			</mx:VBox>
+		</mx:HDividedBox>
+	</mx:VBox>
+</s:Group>

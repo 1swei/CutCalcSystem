@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="400" height="300"
+		 creationComplete="onCreateComplete()">
+	<mx:Parallel target="{this}" id="_animation" duration="400">
+		<mx:Resize id="_resize" duration="400" target="{this}"/>
+		<mx:Move id="_move" duration="400" target="{this}"/>	
+	</mx:Parallel>
+	<fx:Script>
+		<![CDATA[
+			import mx.containers.Canvas;
+			import mx.controls.Button;
+			import mx.core.LayoutContainer;
+			import mx.events.FlexEvent;
+			
+			private var _titleBarDiv:Canvas;
+			private var _ctrlBtnContainer:LayoutContainer;
+			private var _minBtn:Button;
+			private var _maxBtn:Button;
+			private var _closeBtn:Button;
+			private var _resizeBtn:Button;
+			
+			private var _currentPosition:Rectangle;
+			private var _resizeMask:Canvas;
+			private var _dragMask:Canvas;
+			
+			private var _resizeOffsetX:Number;
+			private var _resizeOffsetY:Number;
+			private var _dragOffsetX:Number;
+			private var _dragOffsetY:Number;
+			
+			private var _currentState:String;
+			private var _dragging:Boolean = false;
+			
+			private static const STATE_MAXIMUM:String = "max";
+			private static const STATE_NORMAL:String = "normal";
+			private static const STATE_MINIMUM:String = "min";
+			private function onCreateComplete():void{
+				//处理高度以及宽度相关参数
+				if(minHeight<=0){
+					minHeight = 100;
+				}
+				if(minWidth<=0){
+					minWidth = 120;
+				}
+				if(height < minHeight){
+					height = minHeight;
+				}
+				if(width < minWidth){
+					width = minWidth;
+				}
+				if(maxHeight > this.parent.height){
+					maxHeight = this.parent.height;
+				}
+				if(maxWidth > this.parent.width){
+					maxWidth = this.parent.width;
+				}
+				this._currentState = STATE_NORMAL;
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+</s:TitleWindow>

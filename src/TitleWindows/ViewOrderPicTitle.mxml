@@ -1,0 +1,739 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:BorderContainer xmlns:fx="http://ns.adobe.com/mxml/2009" height="700" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init(event)" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" verticalCenter="0" horizontalCenter="0">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+		<mx:Zoom id="zoomAll" zoomWidthTo="1.25" zoomHeightTo="1.25" zoomWidthFrom="1" zoomHeightFrom="1"  />
+		<mx:RadioButtonGroup id="zhengfu" selectedValue="{item_z.printTimes==0?0:1}" change="zhengfu_changeHandler(event)"/>
+	</fx:Declarations>
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		.labelStyle{
+			font-size:10;
+			font-family:'宋体';
+			font-weight:normal;
+			padding-left:0;
+			padding-right:0;
+			padding-top:0;
+			padding-bottom:0;
+			vertical-align:middle;
+			horizontal-align:left;
+			color:#000000;
+		}
+		.labelTitle{
+			font-size:14;
+			font-family:'宋体';
+			font-weight:bold;
+			padding-left:0;
+			padding-right:0;
+			padding-top:0;
+			padding-bottom:0;
+			vertical-align:middle;
+			color:#000000;
+		}
+	
+		.hbox{
+			borderVisible:true;
+			borderColor:#000000;
+			borderStyle:solid;
+		}
+	</fx:Style>
+	<fx:Script source="../calc/CalcAction.as"/>
+	<fx:Script>
+		<![CDATA[
+			import common.ArrayCollectionUtil;
+			import common.DataFormat;
+			import common.DateFormatHelper;
+			import common.FileUtil;
+			import common.FlexClientConfig;
+			import common.StringHelper;
+			import common.WorkMaterial;
+			import common.WorkPrice;
+			import common.WorkPriceDetail;
+			
+			import entity.AluPro;
+			import entity.AluProDetail;
+			import entity.GlassSizeSet;
+			import entity.OrderDetails;
+			import entity.Orders;
+			
+			import mx.collections.ArrayCollection;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.printing.FlexPrintJob;
+			
+			import skins.PopUpEffect;
+			
+			import util.ImageUtil;
+			[Bindable]public var item_z:Orders;
+			public var aluProArray:ArrayCollection;
+			[Bindable]public var widthPic:int=120;//图纸的宽度
+			[Bindable]public var widthPic2:int=180;//图纸的宽度+尺寸描写的宽度
+			[Bindable]public var height1:int=30;//固上高度
+			[Bindable]public var height2:int=65;//中间门高度
+			[Bindable]public var height3:int=30;//固下高度
+			
+			protected function init(event:FlexEvent):void
+			{
+//				if(new File(FileUtil.qrCode).exists){
+//					qrcode.source=FileUtil.qrCode;
+//				}
+				//型材汇总
+				
+			}
+			public function show(_item:Orders,_aluProArray:ArrayCollection):void{
+				
+				this.item_z=_item;
+				if(_aluProArray==null){
+					_aluProArray = AluPro.getAluPros();
+				}
+				this.aluProArray=_aluProArray;
+				//型材配置+玻璃配置   赋值
+				if(item_z!=null&&item_z.list!=null&&item_z.list.length>0){
+					var _area:Number=0;
+					var order_m:OrderDetails;
+					for(var i:int=0;i<item_z.list.length;i++){
+						order_m = item_z.list.getItemAt(i) as OrderDetails;
+						//order_m.setAluPro(aluProArray);
+						if(order_m.cxType==0){
+							calc(order_m);/**计算每个窗户的用料*/
+							_area+= DataFormat.formatNumber2(order_m.height*order_m.width*order_m.num*0.0001);
+						}else{
+							calcCust(order_m);
+							//area>0,说明自定义公式定义了面积,否则走width*height
+							if(order_m.area>0){
+								_area+= DataFormat.formatNumber2(order_m.area*order_m.num*0.0001);
+							}else{
+								_area+= DataFormat.formatNumber2(order_m.height*order_m.width*order_m.num*0.0001);
+							}
+						}
+					}
+					item_z.area=_area;
+				}
+			}
+			
+			public function initImage1(event:FlexEvent):void
+			{
+				return;
+				var data:OrderDetails = event.currentTarget.currentItem as OrderDetails;
+				if(data.cxType==0||data.picName==null||data.picName==""){
+					return;
+				}
+				if(event.currentTarget.document.winPic==null){
+					return;
+				}
+				var picBlList:ArrayCollection=entity.PicBL.getBlbyParam(data.picName);
+				var theWinPic:Image=winPic[event.target.instanceIndices] as Image;
+				FileUtil.autoSetBlValueOnPic(theWinPic,data.blList,picBlList);
+				/* var _winpicArr:Array = winPic;
+				for(var i:int =0;i<_winpicArr.length;i++){
+					var _winPic:Image = _winpicArr[0];
+					//重新加载text
+				}   */
+				//Alert.show(event.currentTarget.document.winPic[event.currentTarget.currentIndex]);
+			}
+			//给所有窗型图加参数
+			public function initAllImage():void{
+				var am:Array=winPic;
+				for(var i:int=0;i<am.length;i++){
+					var orderm:OrderDetails=item_z.list.getItemAt(i) as OrderDetails;
+					var picBlList:ArrayCollection=entity.PicBL.getBlbyParam(orderm.picName);
+					var theWinPic:Image=winPic[i];
+					FileUtil.autoSetBlValueOnPic(theWinPic,orderm.blList,picBlList,"smallText10");
+				}
+			}
+			[Bindable]
+			public function hboxWidthTop(data:OrderDetails,type:String):int{
+				if(data.cxType==1){
+					return 0;
+				}
+				if(data.zzNumTop>0){
+					var tag:int=0;
+					if(type==""){
+						return int(widthPic/(data.zzNumTop+1));//+1 是因为1个中庭有2个hbox
+					}else{
+						return int(widthPic/(data.zzNumTop+1))+1+tag;//这里多+1 是因为hbox 间隔为-1 所以第二个开始就必须这样
+					}
+				}else{
+					return widthPic;
+				}
+			}
+			[Bindable]
+			public function hboxWidthDown(data:OrderDetails,type:String):int{
+				if(data.cxType==1){
+					return 0;
+				}
+				if(data.zzNumDown>0){
+					var tag:int=0;
+					if(type==""){
+						return int(widthPic/(data.zzNumDown+1));
+					}else{
+						return int(widthPic/(data.zzNumDown+1))+1+tag;
+					}
+				}else{
+					return widthPic;
+				}
+			}
+			[Bindable]
+			public function getPrintMsg_tit_1(orderm:OrderDetails):String{
+				
+				var result:String="";
+				result+=orderm.aluPro.name+" ";
+				result+=(orderm.color+" ");
+				
+				if(orderm.boLi==1){
+					result+="单玻 ";
+				}else if(orderm.boLi==2){
+					result+="双玻 ";
+				}
+				if(orderm.num>1){
+					result+="(×"+orderm.num+"个)";
+				}
+				return result;
+			}
+			[Bindable]
+			public function getPrintMsg_tit_2(orderm:OrderDetails):String{
+				var result:String="";
+				if(orderm.bz!=null&&orderm.bz!=""&&orderm.bz.length>0){
+					result+=" ("+orderm.bz+")";
+				}
+				return result;
+			}
+			/****************************老的获取型材明细  待作废*********************************/
+			/* [Bindable]
+			public function getPrintMsg_wk(orderm:OrderDetails):String{
+				var result:String="";
+				result+="【外框料】\n";
+				
+				var num:int=1;
+				if(orderm.num>0){
+					num=orderm.num;
+				}
+				var tempGdNums:int=0;//带固数
+				if(orderm.gudingTop==1){
+					tempGdNums++;
+				}
+				if(orderm.gudingDown==1){
+					tempGdNums++;
+				}
+				
+				if(orderm.aluPro.isZJ==1){
+					//外框组角
+					if(orderm.jiShan==5){//纯固定。这里组角的竖料 也是一根料到底。
+						result+="高度：    "+orderm.bianFeng+"cm×"+2*num+"\n";
+						result+="宽度：    "+orderm.shangXiaHua+"cm×"+2*num+"\n";
+						if(tempGdNums>0){
+							result+="中挺：    "+orderm.zhongTingH+"cm×"+tempGdNums*num+"\n";
+						}
+					}else{
+						//高度
+						result+="扇外框：  "+DataFormat.formatNumber(orderm.height-orderm.gdTopHeight-orderm.gdDownHeight)+"cm×"+2*num+"\n";
+						//宽度
+						result+="扇外框：  "+orderm.width+"cm×"+2*num+"\n";
+						if(orderm.gudingTop==1){
+							result+="固外框：  "+orderm.gdTopHeight+"cm×"+2*num+"\n";
+						}
+						if(orderm.gudingDown==1){
+							result+="固外框：  "+orderm.gdDownHeight+"cm×"+2*num+"\n";
+						}
+						//固定外框
+						if(tempGdNums>0){
+							result+="固外框：  "+orderm.width+"cm×"+tempGdNums*2*num+"\n";
+							result+="拼板：    "+orderm.width+"cm×"+tempGdNums*num+"\n";
+						}
+					}
+				}else{
+					//不组角
+					result+=(orderm.jiShan==5?'高度：    ':'边封：    ')+orderm.bianFeng+"cm×"+2*num+"\n";
+					if(orderm.jiShan==5){//固定
+						result+="宽度：    "+orderm.shangXiaHua+"cm×"+2*num+"\n";
+						
+						if(orderm.gudingTop==1&&orderm.gudingDown==1){//固上+固下
+							result+="中挺：    "+orderm.shangXiaHua+"cm×"+2*num+"\n";
+						}else if(orderm.gudingTop==1||orderm.gudingDown==1){
+							result+="中挺：    "+orderm.shangXiaHua+"cm×"+num+"\n";
+						}
+					}else{//不是纯固定
+						if(orderm.gudingTop==1&&orderm.gudingDown==1){
+							result+="固定：    "+orderm.shangXiaHua+"cm×"+2*num+"\n";
+						}else if(orderm.gudingTop==1||orderm.gudingDown==1){
+							result+="固定：    "+orderm.shangXiaHua+"cm×"+num+"\n";
+						}
+						if(orderm.gudingTop==1){
+							result+="固上滑：  "+orderm.shangXiaHua+"cm×"+num+"\n";
+						}else{
+							result+="平上滑：  "+orderm.shangXiaHua+"cm×"+num+"\n";
+						}
+						if(orderm.gudingDown==1){
+							result+="固下滑：  "+orderm.shangXiaHua+"cm×"+num+"\n";
+						}else{
+							result+="平下滑：  "+orderm.shangXiaHua+"cm×"+num+"\n";
+						}
+					}
+				}
+				
+				
+				if(orderm.gudingTop==1&&orderm.gdTopHeight>0){
+					if(orderm.zzNumTop>0){//中挺数>0
+						result+="中挺(上)："+orderm.zhongTingTop+"cm×"+orderm.zzNumTop*num+"\n";
+					}
+					if(orderm.jiShan!=5&&orderm.aluPro.isZJ==0){
+						result+="盖板(上)："+orderm.zhongTingTop+"cm×"+2*num+"\n";
+					}
+				}
+				if(orderm.gudingDown==1&&orderm.gdDownHeight>0){
+					if(orderm.zzNumDown>0){
+						result+="中挺(下)："+orderm.zhongTingDown+"cm×"+orderm.zzNumDown*num+"\n";
+					}
+					if(orderm.jiShan!=5&&orderm.aluPro.isZJ==0){
+						result+="盖板(下)："+orderm.zhongTingDown+"cm×"+2*num+"\n";
+					}
+				}
+				if(orderm.zhuanJiao>0){
+					result+="转角：    "+orderm.height+"cm\n";
+				}
+				if(orderm.aluPro.yaTiaoH>0){
+					result+=orderm.yx_gdStr;
+				}
+				return result;
+			} */
+			/****************************老的获取型材明细  待作废*********************************/
+			/* [Bindable]
+			public function getPrintMsg_ns(orderm:OrderDetails):String{
+				var result:String="";
+				var num:int=1;
+				if(orderm.num>0){
+					num=orderm.num;
+				}
+				if(orderm.jiShan==5){
+					return result;
+				}
+				result+="【内扇料】\n";
+				if(orderm.aluPro.isZJ==1){//组角断桥,内扇就是一种料
+					result+="高度：      "+orderm.ggqMax+"cm×"+orderm.jiShan*2*num+"\n";
+					result+="宽度：      "+orderm.shangXiaFang+"cm×"+orderm.jiShan*2*num+"\n";
+				}else{
+					if(orderm.jiShan==2){
+						result+="光勾企(长)："+orderm.ggqMax+"cm×各"+num+"支\n";
+						result+="光勾企(短)："+orderm.ggqMin+"cm×各"+num+"支\n";
+						result+="上方：      "+orderm.shangXiaFang+"cm×"+2*num+"\n";
+						result+="大小下方：  "+orderm.shangXiaFang+"cm×各"+num+"支\n";
+					}else if(orderm.jiShan==3){
+						if(orderm.shouKou==0){//3扇不带收口
+							result+="勾企(长)："+orderm.ggqMax+"cm×"+2*num+"\n";
+							result+="光勾企(短)："+orderm.ggqMin+"cm×各"+2*num+"支\n";
+							result+="上方：      "+orderm.shangXiaFang+"cm×"+3*num+"\n";
+							result+="大下方：    "+orderm.shangXiaFang+"cm×"+num+"\n";
+							result+="小下方：    "+orderm.shangXiaFang+"cm×"+2*num+"\n";
+						}else{//带收口
+							result+="光企(长)：  "+orderm.ggqMax+"cm×"+3*num+"\n";
+							result+="勾企(长)：  "+orderm.ggqMax+"cm×"+num+"\n";
+							result+="光勾企(短)："+orderm.ggqMin+"cm×各"+num+"支\n";
+							result+="上方：      "+orderm.shangXiaFang+"cm×"+3*num+"\n";
+							result+="大下方：    "+orderm.shangXiaFang+"cm×"+2*num+"\n";
+							result+="小下方：    "+orderm.shangXiaFang+"cm×"+num+"\n";
+							
+						}
+					}else if(orderm.jiShan==4){
+						result+="光勾企(长)："+orderm.ggqMax+"cm×各"+2*num+"支\n";
+						result+="光勾企(短)："+orderm.ggqMin+"cm×各"+2*num+"支\n";
+						result+="上方：      "+orderm.shangXiaFang+"cm×"+4*num+"\n";
+						result+="大小下方：  "+orderm.shangXiaFang+"cm×各"+2*num+"支\n";
+					}
+					
+				}
+				
+				if(orderm.shouKou==1){
+					result+="收口：      "+orderm.shouKouNumber+"cm×"+num+"\n";
+				}
+				if(orderm.aluPro.yaTiao>0&&orderm.aluPro.type==0){//推拉窗断桥
+					if(orderm.jiShan>0&&orderm.jiShan!=5){
+						result+="封盖：      "+DataFormat.formatNumber(orderm.shouKouNumber)+"cm×"+orderm.jiShan*num+"\n";
+					}
+				}
+				return result;
+			} */
+			[Bindable]
+			public function getPrintMsg_wk_zd(orderm:OrderDetails):String{
+				return orderm.wkMsg;
+			}
+			[Bindable]
+			public function getPrintMsg_ns_zd(orderm:OrderDetails):String{
+				return orderm.nsMsg;
+			}
+			//玻璃尺寸
+			/* [Bindable]
+			public function getPrintMsg_bl(orderm:OrderDetails):String{
+				var num:int=1;
+				if(orderm.num>0){
+					num=orderm.num;
+				}
+				var result:String="";
+				var aluPro:AluPro = orderm.aluPro;
+				//通过型材配置id 获取一下 玻璃的计算配置
+				var glass:GlassSizeSet =orderm.glass;
+				if(glass==null){
+					glass = GlassSizeSet.getGlassSizeSetByAluProId(aluPro.id);
+				}
+				if(glass!=null){
+					result+="【玻璃尺寸】\n";
+					
+					//窗户的玻璃
+					if(orderm.jiShan!=0&&orderm.jiShan!=5){
+
+						result+=DataFormat.formatNumber(orderm.ggqMax-glass.heigth_in)+"×"+DataFormat.formatNumber(orderm.shangXiaFang-glass.width_in)+"cm "+orderm.jiShan*num+"块";
+						result+="\n";
+						//外框组角.上下固定和窗扇外框用拼版拼起来的,没有边封
+						if(orderm.aluPro.isZJ==1){
+							//有气窗上
+							if(orderm.gudingTop==1){
+								// 固定高度-固定厚度*2-0.8 × (总宽度 - 中挺厚*中挺数-固定厚度*2/几块玻璃-0.8)
+								result+=DataFormat.formatNumber(orderm.gdTopHeight-glass.glass_gd*2-glass.heigth_stc_xs)+"×"+DataFormat.formatNumber((orderm.width-glass.glass_zt*orderm.zzNumTop-glass.glass_gd*2)/(orderm.zzNumTop+1)-glass.width_stc_xs)+"cm "+(orderm.zzNumTop+1)*num+"块";
+								result+="\n";
+							}
+							//有气窗下 同理
+							if(orderm.gudingDown==1){
+								result+=DataFormat.formatNumber(orderm.gdDownHeight-glass.glass_gd*2-glass.heigth_stc_xs)+"×"+DataFormat.formatNumber((orderm.width-glass.glass_zt*orderm.zzNumDown-glass.glass_gd*2)/(orderm.zzNumDown+1)-glass.width_stc_xs)+"cm "+(orderm.zzNumDown+1)*num+"块";
+								result+="\n";
+							}
+						}else{
+							//有气窗上
+							if(orderm.gudingTop==1){
+								// 固定高度-底下的固定厚度-0.8 × (总宽度 - 中挺厚*中挺数-边封厚度*2/几块玻璃-0.8)
+								result+=DataFormat.formatNumber(orderm.gdTopHeight-glass.glass_gd-glass.heigth_stc_xs)+"×"+DataFormat.formatNumber((orderm.width-glass.glass_zt*orderm.zzNumTop-glass.glass_bf*2)/(orderm.zzNumTop+1)-glass.width_stc_xs)+"cm "+(orderm.zzNumTop+1)*num+"块";
+								result+="\n";
+							}
+							//有气窗下 同理
+							if(orderm.gudingDown==1){
+								result+=DataFormat.formatNumber(orderm.gdDownHeight-glass.glass_gd-glass.heigth_stc_xs)+"×"+DataFormat.formatNumber((orderm.width-glass.glass_zt*orderm.zzNumDown-glass.glass_bf*2)/(orderm.zzNumDown+1)-glass.width_stc_xs)+"cm "+(orderm.zzNumDown+1)*num+"块";
+								result+="\n";
+							}
+						}
+						
+					}
+					
+					//纯固定 这里的宽度 是减固定 ,不是减边封了
+					if(orderm.jiShan==5){
+						var numZt:Number=0;//中挺数，这个中挺的扣减数，要在最后的固定玻璃上扣减。确保客户要固定多少，玻璃就实际有多少
+						var numGd:Number=2;//固定数，如果上面固定或者下面固定，那么中间的固定玻璃只需要减1次或者0次固定的位置
+						//有固上
+						if(orderm.gudingTop==1){
+							result+=DataFormat.formatNumber(orderm.gdTopHeight-glass.glass_gd-glass.heigth_stc_xs)+"×"+DataFormat.formatNumber((orderm.width-glass.glass_zt*orderm.zzNumTop-glass.glass_gd*2)/(orderm.zzNumTop+1)-glass.width_stc_xs)+"cm "+(orderm.zzNumTop+1)*num+"块";
+							result+="\n";
+							numZt = glass.glass_zt;
+							numGd -- ;
+							
+						}
+						//有固下 
+						if(orderm.gudingDown==1){
+							result+=DataFormat.formatNumber(orderm.gdDownHeight-glass.glass_gd-glass.heigth_stc_xs)+"×"+DataFormat.formatNumber((orderm.width-glass.glass_zt*orderm.zzNumDown-glass.glass_gd*2)/(orderm.zzNumDown+1)-glass.width_stc_xs)+"cm "+(orderm.zzNumDown+1)*num+"块";
+							result+="\n";
+							numZt += glass.glass_zt;
+							numGd -- ;
+						}
+						
+						result+=DataFormat.formatNumber(orderm.height-orderm.gdTopHeight-orderm.gdDownHeight-numZt-glass.glass_gd*numGd-glass.heigth_stc_xs)+"×"+DataFormat.formatNumber(orderm.width-glass.glass_gd*2-glass.width_stc_xs)+"cm "+num+"块";
+					}
+				} 
+				
+				return result;
+			} */
+			/* [Bindable]
+			public function getPrintMsg_bl_zd(orderm:OrderDetails):String{
+				return orderm.blMsg;
+			} */
+			private function print():void{
+				var printJob:FlexPrintJob = new FlexPrintJob();
+				printJob.printAsBitmap=false;
+				trace("页面高度："+main.height);
+				if(printJob.start()) {
+					printJob.addObject(main);
+					printJob.send();
+				}
+				Orders.updatePrintTimes(item_z.id);
+				item_z.printTimes++;
+			}
+			public function doZoom(event:MouseEvent):void {
+				if (zoomAll.isPlaying) {
+					zoomAll.reverse();
+				}else{
+					zoomAll.play([event.target], event.type == MouseEvent.ROLL_OUT ? true : false);
+				}
+			}
+			private function close():void{
+				item_z=null;
+				aluProArray=null;
+				PopUpEffect.Hide(this);
+			}
+			
+			protected function button2_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+				ImageUtil.saveScreen(main,item_z.khName+DateFormatHelper.Format4(new Date())+".png");
+			}
+			
+			protected function zhengfu_changeHandler(event:Event):void
+			{
+				zhengfuText.text = zhengfu.selectedValue==0?"正本":"副本";
+			}
+			//result+="光勾企(长)："+orderm.ggqMax+"cm×各"+num+"支\n";
+			public function workToText(array:ArrayCollection,isWk:Boolean=true):String{
+				var result = isWk?"【外框料】\n":"【内扇料】\n";
+				if(array!=null&&array.length){
+					for(var i:int = 0;i<array.length;i++){
+						var item:WorkMaterial = array.getItemAt(i) as WorkMaterial;
+						result+= StringHelper.addSomeThing(item.name,8," ",1);
+						result+= item.length + "cm×";
+						if(item.isNameMulti){
+							result+="各";
+						}
+						result += item.num+"\n";
+						
+					}
+				}
+				return result;
+			}
+			
+			public function glassToText(array:ArrayCollection):String{
+				var result = "【玻璃】\n";
+				if(array!=null&&array.length){
+					for(var i:int = 0;i<array.length;i++){
+						var item:WorkGlass = array.getItemAt(i) as WorkGlass;
+						result+= item.length+"×"+item.width + "cm";
+						if(item.other>0){
+							result+="("+item.other+")";
+						}
+						result += "×"+item.num+"块\n";
+						
+					}
+				}
+				return result;
+			}
+			
+			
+			protected function button3_clickHandler(event:MouseEvent):void
+			{
+				var panel:PriceCalcDoc=new PriceCalcDoc();
+				panel.setData(item_z,orderToPrice(item_z));
+				panel.owner = this;
+				PopUpEffect.Show(panel,this.parentApplication as DisplayObject,false);
+			}
+			
+			private function orderToPrice(item:Orders):ArrayCollection{
+				var result:ArrayCollection = new ArrayCollection();
+				if(item!=null&&item.list!=null){
+					for(var i:int=0;i<item.list.length;i++){
+						result.addItem(detailToPrice(item.list.getItemAt(i) as OrderDetails));
+					}
+				}
+				return result;
+			}
+			private function detailToPrice(item:OrderDetails):WorkPrice{
+				var weightAll:Number = 0;//总重量
+				var amountAll:Number = 0;//总金额
+ 				var detailList:ArrayCollection = new ArrayCollection();
+				if(item.aluPro==null){
+					var aluPro:AluPro = AluPro.getAluProById(item.ylType);
+					item.aluPro = aluPro;
+				}
+				var workMaterial:WorkMaterial;
+				var priceDetail:WorkPriceDetail;
+				if(item.wkList!=null&&item.wkList.length>0){
+					//计算外框总重量
+					for(var i:int=0;i<item.wkList.length;i++){
+						workMaterial = item.wkList.getItemAt(i) as WorkMaterial;
+						priceDetail = workMaterialToPriceDetail(item,workMaterial);
+						//总计
+						weightAll += priceDetail.weight;
+						amountAll += priceDetail.amount;
+						detailList.addItem(priceDetail);
+					}
+				}
+				if(item.nsList!=null&&item.nsList.length>0){
+					//计算内扇总重量
+					for(var i:int=0;i<item.nsList.length;i++){
+						workMaterial = item.nsList.getItemAt(i) as WorkMaterial;
+						priceDetail = workMaterialToPriceDetail(item,workMaterial);
+						//总计
+						weightAll += priceDetail.weight;
+						amountAll += priceDetail.amount;
+						detailList.addItem(priceDetail);
+					}
+				}
+				
+				var obj:WorkPrice = new WorkPrice();
+				var name:String="";
+				name +=item.aluPro.name+" ";
+				name +=(item.color+" ");
+				name += item.boLi==1?"单玻":"双玻";
+				obj.name = name;
+				obj.size = item.height+"×"+item.width;
+				obj.area = DataFormat.formatNumber2(item.height*item.width*item.num*0.0001);
+				
+				obj.weight = DataFormat.formatNumber2(weightAll);
+				obj.loss = item.aluPro.loss;
+				obj.price = item.aluPro.price;
+				obj.amount = DataFormat.formatNumber2(amountAll);
+				obj.unitPrice = DataFormat.formatNumber2(obj.amount/obj.area);
+				obj.detail = detailList; 
+				return obj;
+				
+			}
+			
+			//物料明细转报价明细
+			private function workMaterialToPriceDetail(item:OrderDetails,workMaterial:WorkMaterial):WorkPriceDetail{
+				
+				var aluProDetail:AluProDetail = AluProDetail.getAluProByIdAndNameStart(item.ylType,workMaterial.name);
+				var unitWeight:Number = 0;
+				if(aluProDetail!=null){
+					unitWeight = item.boLi==2?aluProDetail.unitWeightDouble:aluProDetail.unitWeight;
+				}
+				//料重量 = 长度 * 根数 * 0.01 * 每米多少kg
+				var theWeight:Number = workMaterial.length*workMaterial.num*0.01*unitWeight;
+				
+				var priceDetail:WorkPriceDetail = new WorkPriceDetail();
+				priceDetail.name = workMaterial.name;
+				priceDetail.length = workMaterial.length;
+				priceDetail.number = workMaterial.num;
+				priceDetail.weight = DataFormat.formatNumber2(theWeight);
+				priceDetail.unitWeight = unitWeight;
+				//金额 = 重量 * 1.13 * 单价
+				priceDetail.amount = DataFormat.formatNumber2(theWeight*item.aluPro.loss*item.aluPro.price);
+				return priceDetail;				
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:VBox width="100%" verticalAlign="middle" horizontalAlign="center" verticalGap="2" cornerRadius="8">
+		<mx:HBox width="100%" id="doHbox" horizontalAlign="center" verticalAlign="middle" backgroundColor="{FlexClientConfig.getInstance().Theme}" height="28">
+			<mx:RadioButton groupName="zhengfu" label="正本" value="0" />
+			<mx:RadioButton groupName="zhengfu" label="副本" value="1" />
+			<mx:Button label="打印" click="print()" buttonMode="true" width="55"/>
+			<mx:Button label="导出" click="button2_clickHandler(event)" buttonMode="true" width="55"/>
+			<mx:Button label="成本" click="button3_clickHandler(event)" buttonMode="true" width="55"/>
+			<mx:Button label="关闭" click="close()" buttonMode="true" width="55"/>
+			<s:CheckBox id="glassSelect" label="玻璃" buttonMode="true" selected="true" toolTip="显示玻璃尺寸"/>
+		</mx:HBox>
+		<mx:VBox horizontalAlign="center" verticalGap="-1" width="800" height="670" horizontalScrollPolicy="off" backgroundColor="#e5e5e5">
+			<mx:VBox verticalAlign="middle" horizontalAlign="center" width="610" borderVisible="false" backgroundColor="#ffffff" id="main" horizontalScrollPolicy="off" 
+					 rollOver="doZoom(event)" rollOut="doZoom(event)">
+				<mx:HBox width="100%">
+					<mx:HBox width="100%" horizontalGap="-1" paddingTop="30" verticalAlign="middle">
+						<mx:FormItem label="" labelWidth="20" labelStyleName="labelStyle" width="200" indicatorGap="0">
+							<mx:Label text="{item_z.khName}" styleName="labelTitle"/>
+						</mx:FormItem>
+						<mx:Label text="总面积：{DataFormat.formatNumber1(item_z.area)} ㎡" styleName="labelStyle" width="95" textAlign="center"/>
+						<mx:FormItem label="下单时间：" labelStyleName="labelStyle" width="135" indicatorGap="0">
+							<mx:Label text="{item_z.xdTime}" styleName="labelStyle" />
+						</mx:FormItem>
+						<mx:HBox horizontalGap="10" verticalAlign="middle">
+							<mx:Label text="*玻璃尺寸仅供参考*" styleName="labelStyle" visible="{glassSelect.selected}" includeInLayout="{glassSelect.selected}"/>
+						</mx:HBox>
+					</mx:HBox>
+					<mx:HBox paddingRight="20" paddingTop="20">
+						<mx:VBox borderVisible="true" borderColor="black" borderStyle="solid" verticalAlign="middle" horizontalAlign="center">
+							<mx:Label id="zhengfuText" fontWeight="bold" fontSize="26" fontFamily="宋体" text="{item_z.printTimes==0?'正本':'副本'}"/>
+						</mx:VBox>
+						<!--<mx:Image id="qrcode" width="60" height="60" scaleContent="true" maintainAspectRatio="false" visible="false" includeInLayout="false"/>-->
+					</mx:HBox>
+					
+				</mx:HBox>
+				<s:Label text="注：{item_z.bz}" width="600" textAlign="left" paddingLeft="243" styleName="labelStyle" 
+						 visible="{item_z.bz!=null&amp;&amp;item_z.bz.length>0}" includeInLayout="{item_z.bz!=null&amp;&amp;item_z.bz.length>0}"/>
+				
+				<mx:Repeater id="rep" width="100%" dataProvider="{item_z.list}" recycleChildren="true"  repeat="initImage1(event)"><!--repeatEnd="initImage1(event)"-->
+					<mx:HBox width="100%" horizontalAlign="left" verticalAlign="middle" horizontalGap="2" styleName="labelStyle" >
+						<!--老图纸部分-->
+						<mx:HBox width="220" horizontalAlign="left" verticalAlign="middle" horizontalGap="2" styleName="labelStyle" visible="{rep.currentItem.cxType==0}"
+								 includeInLayout="{rep.currentItem.cxType==0}" >
+							<!--图纸左边的总高度-->
+							<s:Label text="{rep.currentItem.height}" styleName="labelStyle" width="25" textAlign="right"/>
+							<mx:VBox id="picVbox" verticalGap="-1" horizontalAlign="center" width="{widthPic2+10}" >
+								<!--上固定部分 暂时这样，以后有时间优化-->
+								<mx:HBox id="top" horizontalGap="-1" visible="{rep.currentItem.gudingTop==1}" includeInLayout="{rep.currentItem.gudingTop==1}" horizontalAlign="center" width="{widthPic2}" verticalAlign="middle">
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'')}"  height="{height1}" styleName="hbox" />
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'a')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=1}" includeInLayout="{rep.currentItem.zzNumTop>=1}"/>
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'b')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=2}" includeInLayout="{rep.currentItem.zzNumTop>=2}"/>
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'c')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=3}" includeInLayout="{rep.currentItem.zzNumTop>=3}"/>
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'d')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=4}" includeInLayout="{rep.currentItem.zzNumTop>=4}"/>
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'e')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=5}" includeInLayout="{rep.currentItem.zzNumTop>=5}"/>
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'f')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=6}" includeInLayout="{rep.currentItem.zzNumTop>=6}"/>
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'g')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=7}" includeInLayout="{rep.currentItem.zzNumTop>=7}"/>
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'h')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=8}" includeInLayout="{rep.currentItem.zzNumTop>=8}"/>
+									<mx:HBox width="{hboxWidthTop(rep.currentItem,'i')}" height="{height1}" styleName="hbox" visible="{rep.currentItem.zzNumTop>=9}" includeInLayout="{rep.currentItem.zzNumTop>=9}"/>
+									<s:Label text="{rep.currentItem.gdTopHeight}" width="50" textAlign="left" paddingLeft="2"/>
+								</mx:HBox>
+								<!--中间部分-->
+								<mx:HBox horizontalGap="-1" width="{widthPic2}" height="{height2}" horizontalAlign="center" verticalAlign="middle">
+									<mx:HBox width="{widthPic}" height="{height2}" styleName="hbox" horizontalAlign="center" verticalAlign="middle">
+										<s:Label text="→ {rep.currentItem.jiShan}扇 ←" styleName="labelStyle" 
+												 visible="{rep.currentItem.jiShan!=5&amp;&amp;rep.currentItem.aluPro.type==0}" 
+												 includeInLayout="{rep.currentItem.jiShan!=5&amp;&amp;rep.currentItem.aluPro.type==0}"/>
+										<s:Label text="固 定" styleName="labelStyle" visible="{rep.currentItem.jiShan==5}" includeInLayout="{rep.currentItem.jiShan==5}"/>
+										<s:Label text="平 开{rep.currentItem.jiShan==2?' (双开)':''}" styleName="labelStyle" visible="{rep.currentItem.aluPro.type>0}" includeInLayout="{rep.currentItem.aluPro.type>0}"/>
+									</mx:HBox>
+									
+									<mx:VBox verticalAlign="middle" horizontalAlign="left" width="50" height="{height2}" visible="{rep.currentItem.gudingTop==1||rep.currentItem.gudingDown==1}" >
+										
+										<mx:VBox verticalGap="-2" verticalAlign="top" height="21" >
+											<s:Label text=" ￣"/>
+											<s:Label text=" ↓"/>
+										</mx:VBox>
+										<s:Label text="{DataFormat.formatNumber(rep.currentItem.height-rep.currentItem.gdTopHeight-rep.currentItem.gdDownHeight)}" width="50" textAlign="left" paddingLeft="2"  />
+										<mx:VBox verticalGap="-2" verticalAlign="bottom" height="22" >
+											<s:Label text=" ↑"/>
+											<s:Label text=" ＿"/>
+										</mx:VBox>
+										
+									</mx:VBox>
+								</mx:HBox>
+								<!--下固定部分-->
+								<mx:HBox id="down" horizontalGap="-1" visible="{rep.currentItem.gudingDown==1}" includeInLayout="{rep.currentItem.gudingDown==1}" horizontalAlign="center" width="{widthPic2}" verticalAlign="middle">
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'')}"  height="{height3}" styleName="hbox" />
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'a')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=1}" includeInLayout="{rep.currentItem.zzNumDown>=1}"/>
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'b')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=2}" includeInLayout="{rep.currentItem.zzNumDown>=2}"/>
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'c')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=3}" includeInLayout="{rep.currentItem.zzNumDown>=3}"/>
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'d')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=4}" includeInLayout="{rep.currentItem.zzNumDown>=4}"/>
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'e')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=5}" includeInLayout="{rep.currentItem.zzNumDown>=5}"/>
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'f')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=6}" includeInLayout="{rep.currentItem.zzNumDown>=6}"/>
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'g')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=7}" includeInLayout="{rep.currentItem.zzNumDown>=7}"/>
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'h')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=8}" includeInLayout="{rep.currentItem.zzNumDown>=8}"/>
+									<mx:HBox width="{hboxWidthDown(rep.currentItem,'i')}" height="{height3}" styleName="hbox" visible="{rep.currentItem.zzNumDown>=9}" includeInLayout="{rep.currentItem.zzNumDown>=9}"/>
+									<s:Label text="{rep.currentItem.gdDownHeight}" width="50" textAlign="left" paddingLeft="2"/>
+								</mx:HBox>
+								<!--图纸下面的宽度-->
+								<s:Label text="{rep.currentItem.width}" paddingTop="2" styleName="labelStyle" paddingRight="50"/>
+							</mx:VBox>
+						</mx:HBox>
+						<!--新图纸部分-->
+						<mx:HBox borderVisible="true" width="220" visible="{rep.currentItem.cxType==1}" includeInLayout="{rep.currentItem.cxType==1}" 
+								 paddingLeft="5" paddingBottom="5">
+							<mx:Image id="winPic" width="150" height="105" source="{rep.currentItem.picName==null?null:FileUtil.winTmpPath+rep.currentItem.picName}" 
+									  scaleContent="true" maintainAspectRatio="false"
+									  />
+							
+						</mx:HBox>
+						<!--材料明细说明部分-->
+						<mx:VBox width="100%" horizontalAlign="left" horizontalGap="-1" 
+								 horizontalScrollPolicy="off" verticalScrollPolicy="off" paddingRight="5">
+							<mx:HBox>
+								<s:Label text="{getPrintMsg_tit_1(rep.currentItem)}"  textAlign="left" styleName="labelStyle" fontSize="12" fontWeight="bold"/>
+								<s:Label text="{getPrintMsg_tit_2(rep.currentItem)}"  textAlign="left" styleName="labelStyle" />
+							</mx:HBox>
+							<mx:HBox styleName="hbox" height="1" width="100%"/>
+							<mx:HBox width="100%" horizontalGap="{glassSelect.selected?15:50}">
+								<s:Label text="{workToText(rep.currentItem.wkList)}" textAlign="left" styleName="labelStyle" />
+								<s:Label text="{workToText(rep.currentItem.nsList,false)}" textAlign="left" styleName="labelStyle" />
+								<s:Label text="{glassToText(rep.currentItem.glassList)}" textAlign="left" styleName="labelStyle" includeInLayout="{glassSelect.selected}" visible="{glassSelect.selected}"/>
+							</mx:HBox>
+						</mx:VBox>
+					</mx:HBox>
+					<mx:HBox styleName="hbox" height="1" width="100%"/>
+				</mx:Repeater>
+			</mx:VBox>
+		</mx:VBox>
+	</mx:VBox>
+</s:BorderContainer>

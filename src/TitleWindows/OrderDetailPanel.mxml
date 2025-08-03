@@ -1,0 +1,708 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="编辑订单" creationComplete="init(event)"
+		 xmlns:s="library://ns.adobe.com/flex/spark" close="close()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="545" minHeight="370"
+		 horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" xmlns:my="skins.my.*" >
+	<fx:Declarations>
+		<!--<mx:RadioButtonGroup id="ylType" selectedValue="{item_m==null?0:item_m.ylType}" change="ylType_changeHandler(event)"/>-->
+		<mx:RadioButtonGroup id="boLi" selectedValue="{item_m==null?0:item_m.boLi}" change="item_m.boLi=int(boLi.selectedValue);" enabled="{item_m.aluPro.type==0}"/>
+		<mx:RadioButtonGroup id="jiShan" selectedValue="{item_m==null?0:item_m.jiShan}" change="jiShan_changeHandler(event)"/>
+		<mx:RadioButtonGroup id="state" selectedValue="{item_m==null?0:item_m.cxType}" change="state_changeHandler(event)"/>
+	</fx:Declarations>
+	<fx:Script source="../TitleWindows/order/OrderAction.as"/>
+	<fx:Script>
+		<![CDATA[
+			import common.ArrayCollectionUtil;
+			import common.DataCmdEvent;
+			import common.DateFormatHelper;
+			import common.FileUtil;
+			
+			import entity.AluPro;
+			import entity.Colors;
+			import entity.CustomFormula;
+			import entity.Customer;
+			import entity.OrderDetailBL;
+			import entity.OrderDetails;
+			import entity.Orders;
+			import entity.PicBL;
+			
+			import module.CustomerModule;
+			import module.OrderModule;
+			
+			import mx.binding.utils.ChangeWatcher;
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.TextInput;
+			import mx.core.FlexGlobals; 
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ItemClickEvent;
+			import mx.utils.ArrayUtil;
+			
+			import skins.PopUpEffect;
+			
+			import spark.events.IndexChangeEvent;
+			[Bindable]
+			public var item_m:OrderDetails;
+			[Bindable]
+			public var item_z:Orders;
+			
+			[Bindable]public var colorArray:ArrayCollection;
+			[Bindable]public var ylTypeArray:ArrayCollection;
+			[Bindable]public var khArray:ArrayCollection;
+			public var conn:SQLConnection;
+			public var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			private var file:File;
+			public static const LOADPIC:String="LOAD_PIC_DATA";
+			protected function init(event:FlexEvent):void
+			{
+				
+				file = new File();
+				file.nativePath = FileUtil.winTmpPath;
+				file.addEventListener(Event.SELECT, selectHandler);
+				
+			}
+			private var _continue:Boolean=false;
+			
+			public function setData(_item_z:Orders,_item_m:OrderDetails):void{
+				this.item_z=_item_z;
+				this.item_m=_item_m;
+				this.colorArray=Colors.getColors();
+				this.ylTypeArray=AluPro.getAluPros();
+				this.khArray = Customer.getCustomers();
+				//根据订单明细保存的图片名,去获取图片.
+				
+				refreshPic();
+				//循环给订单明细里的
+				/* if(item_z!=null&&item_z.list!=null&&item_z.list.length>0){
+					var order_temp:OrderDetails;
+					for(var i:int=0;i<item_z.list.length;i++){
+						order_temp = item_z.list.getItemAt(i) as OrderDetails;
+						order_temp.setAluPro(ylTypeArray);
+					}
+				} */
+			}
+			/* private function showPic_m():void{
+				var stream:FileStream = new FileStream();
+				var file:File = new File(FileUtil.winPicPath+item_m.picName);//绑定一个文件
+				stream.open(file,FileMode.READ);//读取文件
+				trace(stream.readMultiByte(stream.bytesAvailable,'utf-8'));
+				stream.close();
+			} */
+			private function isStop(type:String):void{
+				if(type=="stateError"){
+					Alert.show("外框 或 内扇已经完成，是否继续保存本次修改？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler);
+				}
+			}
+			private function alertCloseHandler(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					_continue=true;
+					save();
+				}
+			}
+			protected function save():void
+			{
+				if(item_z.list==null||item_z.list.length==0){
+					return;
+				}
+				if(!isContinue()){
+					return;
+				}
+				if(!_continue&&(item_z.stateIn=="Y"||item_z.stateOut=="Y")){
+					isStop("stateError");
+					return;
+				}
+				if(item_z.id>0){
+					update_z();
+				}else{
+					insert_z();
+				}
+				if(item_z.khName!=null&&item_z.khName.length>0){
+					autoAddCustByName();
+				}
+				dispatchEvent(new Event("REFRESHORDERDATA"));
+				close();
+			}
+			
+			/**自动添加客户, 有名字就更新(暂时注释,有风险),没有就新增*/
+			private function autoAddCustByName():void{
+				var dataCustArray:ArrayCollection=Customer.getCustomerByName(item_z.khName);
+				if(dataCustArray.length==0){
+					var newCust:Customer=new Customer();
+					newCust.name=item_z.khName;
+					newCust.state="Y";
+					newCust.type=0;
+					newCust.typeId=0;
+					newCust.address=item_z.khAddress;
+					newCust.phone = item_z.khPhone;
+					Customer.insert(newCust);
+				}/* else{
+					var data:Customer=dataCustArray.getItemAt(0) as Customer;
+					data.address=item_z.khAddress;
+					data.phone = item_z.khPhone;
+					Customer.update(data);
+				} */
+			}
+			
+			private function isContinue():Boolean{
+				var tempItem:OrderDetails;
+				for(var i:int=0;i<item_z.list.length;i++){
+					tempItem = item_z.list.getItemAt(i) as OrderDetails;
+					if(tempItem.ylType<=0||ylType.selectedIndex<0){
+						Alert.show("请选择第 "+(i+1)+" 项材料类型！","提示");
+						return false;
+					}
+					if(tempItem.color==null||tempItem.color==""||color.selectedIndex<0){
+						Alert.show("请填写第 "+(i+1)+" 项材料颜色！","提示");
+						return false;
+					}
+					if(tempItem.cxType==0&&(tempItem.height==0||tempItem.width==0)){
+						Alert.show("请填写第 "+(i+1)+" 项尺寸！","提示");
+						return false;
+					}
+					if(tempItem.num<=0){
+						Alert.show("请填写第 "+(i+1)+" 项窗型数量！","提示");
+						return false;
+					}
+					if(tempItem.cxType==1){
+						if(tempItem.picName==null||tempItem.picName.length==0){
+							Alert.show("请选择第 "+(i+1)+" 项窗型图！","提示");
+							return false;
+						}
+						if(tempItem.blList==null||tempItem.blList.length==0){
+							Alert.show("第 "+(i+1)+" 项窗型图未发现变量！","提示");
+							return false;
+						}
+						for(var j:int=0;j<tempItem.blList.length;j++){
+							var ordermBl:OrderDetailBL = tempItem.blList.getItemAt(j) as OrderDetailBL;
+							if(ordermBl.blValue<=0){
+								Alert.show("第 "+(i+1)+" 项窗型图 "+ordermBl.blName+" 值未填写！","提示");
+								return false;
+							}
+						}
+					}
+				}
+				return true;
+			}
+			//订单明细表
+			private function insertOrUpdate_m(id:int):void{
+				if(item_z.list!=null&&item_z.list.length>0){
+					var orderm:OrderDetails;
+					for(var i:int=0;i<item_z.list.length;i++){
+						orderm = item_z.list.getItemAt(i) as OrderDetails;
+						orderm.orderId=id;
+						if(orderm.id>0){
+							update_m(orderm);//更新不改变外键id
+							insertOrdermBl(orderm);
+						}else{
+							orderm.id=insert_m(orderm);
+							insertOrdermBl(orderm);
+						}
+					}
+				}
+			}
+			//订单明细表下的变量信息,更新宽高
+			private function insertOrdermBl(orderm:OrderDetails):void{
+				if(orderm.blList!=null&&orderm.blList.length>0){
+					for(var i:int=0;i<orderm.blList.length;i++){
+						var item:OrderDetailBL = orderm.blList.getItemAt(i) as OrderDetailBL;
+						item.detailId=orderm.id;
+						if(item.id==0){
+							OrderDetailBL.insert(item);
+						}else{
+							OrderDetailBL.update(item);
+						}
+					}
+				}
+			}
+			private function delDataForTheArray(arr:ArrayCollection):void{
+				if(arr!=null&&arr.length>0){
+					var itemTemp_m:OrderDetails;
+					for(var i:int=0;i<arr.length;i++){
+						itemTemp_m = arr.getItemAt(i) as OrderDetails;
+						//删除明细
+						if(itemTemp_m.id>0){
+							delete_m(itemTemp_m.id);
+						}
+						//删除明细表下的变量集合
+						if(itemTemp_m.blList!=null&&itemTemp_m.blList.length>0){
+							OrderDetailBL.delBlbyParam(itemTemp_m.id);
+						}
+					}
+				}
+			}
+			
+			private function zhaiyao():String{
+				var result:String="";
+				if(item_z!=null&&item_z.list!=null&&item_z.list.length>0){
+					var orderm:OrderDetails;
+					for(var i:int=0;i<item_z.list.length;i++){
+						orderm = item_z.list.getItemAt(i) as OrderDetails;
+						/* if(orderm.ylType==1){
+							result+="78 ";
+						}else if(orderm.ylType==2){
+							result+="757 ";
+						}else if(orderm.ylType==3){
+							result+="坚美 ";
+						} */
+						if(orderm.aluPro==null){
+							orderm.setAluPro(ylTypeArray);
+						}
+						result+=orderm.aluPro.name+" ";
+						result+=(orderm.color+" ");
+						if(orderm.boLi==1){
+							result+="单玻 ";
+						}else if(orderm.boLi==2){
+							result+="双玻 ";
+						}
+						if(orderm.cxType==1){
+							result+="\n";
+							continue;
+						}
+						if(orderm.jiShan!=0&&orderm.jiShan!=5){
+							result+=orderm.jiShan+"扇 ";
+						}
+						if(orderm.jiShan==5){
+							result+="固定 ";
+						}
+						result+=(orderm.width+"×"+orderm.height);
+						result+="\n";
+					}
+				}
+				return result;
+			}
+			
+			private function close():void{
+				PopUpEffect.Hide(this);
+			}
+			
+			
+			
+			protected function sg_changeHandler(event:Event):void
+			{
+				if(sg.selected){
+					item_m.gudingTop=1;
+				}else{
+					item_m.gudingTop=0;
+					item_m.gdTopHeight=0;
+					item_m.zzNumTop=0;
+				}
+			}
+			
+			protected function xg_changeHandler(event:Event):void
+			{
+				if(xg.selected){
+					item_m.isGDH=0;
+					item_m.gudingDown=1;
+				}else{
+					item_m.gudingDown=0;
+					item_m.gdDownHeight=0;
+					item_m.zzNumDown=0;
+				}
+			}
+			
+			protected function jiShan_changeHandler(event:Event):void
+			{
+				if(item_m.aluPro.type>0&&int(jiShan.selectedValue)>2){
+					jiShan.selectedValue=0;
+					return;
+				}
+				item_m.jiShan=int(jiShan.selectedValue);
+				
+				if(item_m.jiShan==4||item_m.jiShan==6){
+					item_m.shouKou=1;
+				}else{
+					item_m.shouKou=0;
+				}
+				
+				if(item_m.jiShan==5){//纯固定
+					item_m.ggqMax=0;
+					item_m.ggqMin=0;
+					item_m.shangXiaFang=0;
+					item_m.shouKouNumber=0;
+				}
+			}
+			
+			
+			protected function addItem_m(event:MouseEvent):void
+			{
+				if(!isContinue()){
+					return;
+				}
+				var new_item_m:OrderDetails=this.item_m.createNewObject();
+				new_item_m.xh=item_z.list.length+1;
+				item_z.list.addItem(new_item_m);
+				//添加后默认选中最后一项
+				item_m = new_item_m;
+				refreshPic();
+				//viewBut.selectedIndex=item_z.list.length-1;
+			}
+			protected function delItem_m(event:MouseEvent):void
+			{
+				if(item_z.list==null||item_z.list.length<=1){
+					return;
+				}
+				var i:int=viewBut.selectedIndex;
+				refreshIndex(item_m);
+				if(item_m.id>0){
+					if(item_z.delList==null){
+						item_z.delList=new ArrayCollection();
+					}
+					item_z.delList.addItem(item_m);
+				}
+				item_z.list.removeItemAt(i);
+				if(i>=item_z.list.length){
+					this.item_m = item_z.list.getItemAt(i-1) as OrderDetails;
+				}else{
+					this.item_m = item_z.list.getItemAt(i) as OrderDetails;
+				}
+				refreshPic();
+			}
+			
+			 protected function viewBut_changeHandler(event:IndexChangeEvent):void
+			{
+				// TODO Auto-generated method stub
+				if(item_z.list!=null)
+				{
+					item_m=item_z.list.getItemAt(event.newIndex)  as OrderDetails;
+					refreshPic();
+				}
+			}
+			//item_m 变了,就要刷新图片,虽然图片source绑定了数据源,但图片上的text控件需要刷新
+			private function refreshPic():void{
+				//先删除所有text
+				FileUtil.removeAllChild(winPic);
+				//winPic.removeChildren(1,winPic.numChildren-1);
+				if(item_m.cxType==0||item_m.picName==null||item_m.picName==""){
+					return;
+				}
+				var picBlList:ArrayCollection=PicBL.getBlbyParam(item_m.picName);
+				//重新加载text
+				FileUtil.autoSetBlValueOnPic(winPic,item_m.blList,picBlList);
+				
+			}
+			//序号更新
+			private function refreshIndex(item:OrderDetails):void{
+				if(item==null){
+					return;
+				}
+				var tempItem:OrderDetails;
+				for(var i:int=0;i<item_z.list.length;i++){
+					tempItem = item_z.list.getItemAt(i) as OrderDetails; 
+					//删除的序号小于当前序号。则序号减少1
+					if(item.xh<tempItem.xh){
+						tempItem.xh-=1;
+					}
+				}
+			}
+			protected function ylType_changeHandler(event:Event):void
+			{
+				var theAluPro:AluPro=ylType.selectedItem as AluPro;
+				if(theAluPro==null){
+					item_m.ylType=0;
+					item_m.aluPro=null;
+					return;
+				}
+				item_m.ylType=theAluPro.id;
+				item_m.aluPro=theAluPro;
+				if(theAluPro.type>0){//平开料
+					item_m.shouKou=0;
+					item_m.zhuanJiao=0;
+					item_m.boLi=0;
+					item_m.zzNumDown=0;
+					item_m.zzNumTop=0;
+				}
+			}
+			
+			public function importCustomer(customer:Customer):void{
+				item_z.khName=customer.name;
+				item_z.khAddress=customer.address;
+				item_z.khPhone=customer.phone;
+			}
+			
+			protected function combobox1_focusOutHandler():void
+			{
+				// TODO Auto-generated method stub
+				if(khName.selectedItem==""||khName.selectedItem==null||!(khName.selectedItem as Customer)){
+					item_z.khName=khName.textInput.text;
+				}else{
+					var customer:Customer = khName.selectedItem as Customer;
+					if(customer==null){
+						return;
+					}
+					item_z.khName=customer.name;
+					item_z.khAddress=customer.address;
+					item_z.khPhone=customer.phone;
+				}
+				
+			}
+			
+			protected function state_changeHandler(event:Event):void
+			{
+				item_m.cxType=state.selectedValue as int;
+			}
+			
+			protected function dataGrid_itemEditEndHandler(event:DataGridEvent):void
+			{
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				var text:String=ti.text;
+				var item:OrderDetailBL=dataGrid.selectedItem as OrderDetailBL;
+				if(event.dataField=="blValue"){
+					var num:Number = Number(text);
+					if(isNaN(num))
+					{
+						event.preventDefault();
+						ti.errorString="输入格式错误";
+						return;
+					}
+				}
+				event.itemRenderer.data[event.dataField] = text;
+				ti.text = text;
+				//自定义窗型，回写宽高
+				if(item_m.cxType==1){
+					if("A" == event.itemRenderer.data.blName){
+						item_m.width = item.blValue;
+					}else if("B" == event.itemRenderer.data.blName){
+						item_m.height = item.blValue;
+					}
+				}
+				setPicTextValueByOrderBl(event.itemRenderer.data["blName"] as String,text);
+			}
+			//通过订单变量值,给图片上对应的text赋值
+			private function setPicTextValueByOrderBl(_blName:String,_blValue:String):void{
+				var textIn:TextInput=winPic.getChildByName(_blName) as TextInput;
+				if(textIn){
+					textIn.text=_blValue;
+				}
+			}
+			
+			private var blNum:int=0;
+			private function onComplete(event:Event):void
+			{
+				item_m.blList=null;
+				FileUtil.removeAllChild(winPic);
+				item_m.picName=file.name;
+				winPic.source = file.nativePath;
+				var cstList:ArrayCollection = CustomFormula.getCustomFormulasByParam(item_m.ylType,item_m.picName);
+				if(cstList==null||cstList.length==0){
+					Alert.show("该窗型尚未添加公式，请先添加公式！","提示");
+				}
+				setBlDataArray(FileUtil.autoSetBLOnPic(this.winPic,file.name));
+			}
+			public function loadChange(thePicName:String):void{
+				item_m.blList=null;
+				FileUtil.removeAllChild(winPic);
+				item_m.picName=thePicName;
+				winPic.source = null;
+				winPic.source = FileUtil.winTmpPath+thePicName;
+				var cstList:ArrayCollection = CustomFormula.getCustomFormulasByParam(item_m.ylType,thePicName);
+				setBlDataArray(FileUtil.autoSetBLOnPic(this.winPic,thePicName));
+			}
+			private function selectHandler(event:Event):void { 
+				file.addEventListener(Event.COMPLETE,onComplete);
+				file.load();
+			} 
+			protected function picName_clickHandler(event:MouseEvent):void
+			{
+				if(item_m.ylType==0){
+					Alert.show("请先选择型材","提示");
+					return;
+				}
+				file.browse([FileUtil.imageTypes]);
+			}
+			private function setBlDataArray(_picBlArray:ArrayCollection):void{
+				if(_picBlArray.length==0){
+					Alert.show("该窗型图尚未绑定变量","提示");
+					return;
+				}
+				if(item_m.blList==null){
+					item_m.blList=new ArrayCollection();
+				}
+				
+				var haveOrderBllist = OrderDetailBL.getbyParam(item_m.id);
+				//之前没保存过订单变量
+				if(haveOrderBllist==null||haveOrderBllist.length==0){
+					var orderBl:OrderDetailBL;
+					for each(var picBl:PicBL in _picBlArray){
+						orderBl = new OrderDetailBL();
+						orderBl.detailId=item_m.id;
+						orderBl.blName=picBl.blName;
+						orderBl.blValue=0;
+						item_m.blList.addItem(orderBl);
+					}
+					
+				}else{
+					//若保存过订单变量,那么订单变量和图片变量不一样的才进行添加item
+					item_m.blList.addAll(haveOrderBllist);
+					top:for each(var _picBl:PicBL in _picBlArray){
+						var find:Boolean=false;
+						for each(var haveOrderBl:OrderDetailBL in haveOrderBllist){
+							if(_picBl.blName==haveOrderBl.blName){
+								find=true;
+								continue top;
+							}
+						}
+						if(!find){
+							var newOrderbl:OrderDetailBL=new OrderDetailBL();
+							newOrderbl.detailId=item_m.id;
+							newOrderbl.blName=_picBl.blName;
+							newOrderbl.blValue=0;
+							item_m.blList.addItem(newOrderbl);
+						}
+					}
+					
+				}
+				
+			}
+			
+			protected function modify_clickHandler(event:MouseEvent):void
+			{
+				// TODO Auto-generated method stub
+				var theAluPro:AluPro=ylType.selectedItem as AluPro;
+				if(theAluPro==null){
+					Alert.show("请先选择型材","提示");
+					return;
+				}
+				var panel:CustomFormulaDoc=new CustomFormulaDoc();
+				panel.dbStatement = statement;
+				panel.addEventListener(LOADPIC,function (e:DataCmdEvent):void{
+					loadChange(e.data as String);
+				});
+				PopUpEffect.Show(panel,this.parentApplication as DisplayObject);
+				panel.setData(theAluPro,ylTypeArray,item_m.picName);
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle" verticalScrollPolicy="auto" horizontalScrollPolicy="off">
+		<mx:HBox width="100%" paddingTop="20">
+			<mx:FormItem label="客户名称" labelWidth="80" indicatorGap="0">
+				<mx:HBox horizontalGap="4" width="150">
+					<my:ComboBoxFilter id="khName" dataSource="{khArray}" labelField="name" width="150" focusIn="IME.enabled=true" textAlign="left" 
+									   selectedItem="{item_z.khName}" change="combobox1_focusOutHandler()" />
+				</mx:HBox>
+			</mx:FormItem>
+			<mx:FormItem label="电话" labelWidth="80" indicatorGap="0">
+				<skins:BindTextInput data="{item_z}" dataField="khPhone" width="150" text="{item_z.khPhone}" />
+			</mx:FormItem>
+		</mx:HBox>
+		<mx:HBox width="100%">
+			<mx:FormItem label="下单时间" labelWidth="80" indicatorGap="0" includeInLayout="false" visible="false">
+				<skins:MyDateField  id="xd" selectedDate="{new Date()}" enabled="false" width="150"/>
+			</mx:FormItem>
+			<mx:FormItem label="客户地址" labelWidth="80" indicatorGap="0">
+				<skins:BindTextInput data="{item_z}" dataField="khAddress" width="150" text="{item_z.khAddress}" />
+			</mx:FormItem>
+			<mx:FormItem label="备注" labelWidth="80" indicatorGap="0">
+				<skins:BindTextInput data="{item_z}" dataField="bz" width="150" text="{item_z.bz}" />
+			</mx:FormItem>
+		</mx:HBox>
+		<mx:HBox height="1" borderVisible="true" borderStyle="solid" borderColor="#87CEEB" width="100%"/>
+		<mx:HBox paddingBottom="0" width="{this.width}" horizontalGap="4" verticalAlign="middle" horizontalAlign="left" height="{item_z.list.length>10?55:25}">
+			
+			<s:TabBar dataProvider="{item_z.list}"  height="24" buttonMode="true" labelField="xh" maxWidth="{this.width}"
+					  id="viewBut" change="viewBut_changeHandler(event)" selectedIndex="{item_z.list.getItemIndex(item_m)}" skinClass="skins.TabbarSkin"/>
+			<mx:Image source="/img/add.png" width="20" height="20" toolTip="添加" click="addItem_m(event)" buttonMode="true"/>
+			<mx:Image source="/img/del.png" width="20" height="20" toolTip="删除" click="delItem_m(event)" buttonMode="true" /> 	
+		</mx:HBox>
+		<!--公共控件-->
+		<mx:VBox horizontalAlign="left" paddingLeft="20" width="100%">
+			<mx:HBox  horizontalGap="2" >
+				<mx:RadioButton groupName="state" label="常规推拉" value="0" width="85"/>
+				<mx:RadioButton groupName="state" label="自定窗型" value="1" width="85"/>
+			</mx:HBox>
+			<mx:HBox horizontalAlign="left" horizontalGap="2" verticalAlign="middle">
+				
+				<mx:ComboBox id="ylType" width="100" dataProvider="{ylTypeArray}" labelField="name" prompt="型材" 
+							 selectedIndex="{ArrayCollectionUtil.getIndex(item_m.ylType,ylTypeArray,'id',-1)}" change="ylType_changeHandler(event)"/>
+				
+				<mx:ComboBox id="color" width="80" dataProvider="{colorArray}" labelField="color" prompt="颜色" 
+							 selectedIndex="{ArrayCollectionUtil.getIndex(item_m.color,colorArray,'color',-1)}" change="item_m.color=color.selectedLabel"/>
+				
+				<mx:Label text="×"/>
+				<skins:BindTextInput data="{item_m}" dataField="num" width="35" text="{item_m.num}" restrict="0-9" maxChars="4" toolTip="窗型数量"/>
+			</mx:HBox>
+			<mx:HBox horizontalAlign="left" horizontalGap="2" >
+				<mx:RadioButton groupName="boLi" label="未知" value="0" width="85"/>
+				<mx:RadioButton groupName="boLi" label="单玻" value="1" width="85"/>
+				<mx:RadioButton groupName="boLi" label="双玻" value="2" width="85"/>
+			</mx:HBox>
+		</mx:VBox>
+		
+		<!--普通推拉-->
+		<mx:VBox width="100%" paddingLeft="20" horizontalAlign="left" visible="{item_m.cxType==0}" includeInLayout="{item_m.cxType==0}">
+			
+			<mx:HBox horizontalAlign="left" horizontalGap="2">
+				<mx:RadioButton groupName="jiShan" label="未知" value="0" width="85"/>
+				<mx:RadioButton groupName="jiShan" label="2扇" value="2" width="85"/>
+				<mx:RadioButton groupName="jiShan" label="3扇" value="3" width="85"/>
+				<mx:RadioButton groupName="jiShan" label="4扇" value="4" width="85"/>
+				<mx:RadioButton groupName="jiShan" label="6扇" value="6" width="85"/>
+				<mx:RadioButton groupName="jiShan" label="固定" value="5" width="85"/>
+			</mx:HBox>
+			<mx:HBox horizontalAlign="left" horizontalGap="2" >
+				<mx:FormItem label="宽度cm" indicatorGap="8" labelWidth="55">
+					<skins:BindTextInput data="{item_m}" dataField="width" width="110" text="{item_m.width}" restrict="0-9." />
+				</mx:FormItem>
+				<mx:CheckBox label="上固cm" color="#000000" id="sg" width="75" selected="{item_m.gudingTop==1}" change="sg_changeHandler(event)" enabled="{item_m.aluPro.type!=2}"/>
+				<skins:BindTextInput visible="{item_m.gudingTop==1}" includeInLayout="{item_m.gudingTop==1}"  enabled="{item_m.aluPro.type!=2}"
+									 data="{item_m}" dataField="gdTopHeight" width="117" text="{item_m.gdTopHeight}" />
+				<mx:HBox horizontalGap="0" verticalAlign="middle" visible="{item_m.gudingTop==1}" includeInLayout="{item_m.gudingTop==1}">
+					<skins:BindTextInput data="{item_m}" dataField="zzNumTop" width="40" text="{item_m.zzNumTop}" restrict="0-9" maxChars="1" />
+					<s:Label text="根"/>
+				</mx:HBox>
+				<s:Spacer width="6"/>
+				<mx:CheckBox label="转角" color="#000000" id="zhuanJiao" selected="{item_m.zhuanJiao==1}" change="item_m.zhuanJiao=zhuanJiao.selected?1:0;" enabled="{item_m.aluPro.type==0}"/>
+
+			</mx:HBox>
+			<mx:HBox horizontalAlign="left" horizontalGap="2" >
+				<mx:FormItem label="高度cm" indicatorGap="8" labelWidth="55" >
+					<skins:BindTextInput data="{item_m}" dataField="height" width="110" text="{item_m.height}" restrict="0-9." />
+				</mx:FormItem>
+				<mx:CheckBox label="下固cm" color="#000000" id="xg" width="75" selected="{item_m.gudingDown==1}" change="xg_changeHandler(event)" enabled="{item_m.isGDH==0}"/>
+				<skins:BindTextInput visible="{item_m.gudingDown==1}" includeInLayout="{item_m.gudingDown==1}" enabled="{item_m.aluPro.type!=2}"
+									 data="{item_m}" dataField="gdDownHeight" width="117" text="{item_m.gdDownHeight}" />
+				<mx:HBox horizontalGap="0" verticalAlign="middle" visible="{item_m.gudingDown==1}" includeInLayout="{item_m.gudingDown==1}">
+					<skins:BindTextInput data="{item_m}" dataField="zzNumDown" width="40" text="{item_m.zzNumDown}" restrict="0-9" maxChars="1" enabled="{item_m.aluPro.type!=2}"/>
+					<s:Label text="根"/>
+				</mx:HBox>
+				<s:Spacer width="6"/>
+				<mx:CheckBox label="收口" color="#000000" id="shouKou" selected="{item_m.shouKou==1}" 
+							 change="item_m.shouKou=shouKou.selected?1:0;" enabled="{item_m.aluPro.type==0}"/>
+				<s:Spacer width="6"/>
+				<mx:CheckBox label="高低滑" color="#000000" id="isGDH" selected="{item_m.isGDH==1}" 
+							 change="item_m.isGDH=isGDH.selected?1:0;" visible="{item_m.gudingDown==0}" includeInLayout="{item_m.gudingDown==0}"/>
+			</mx:HBox>
+			
+		</mx:VBox>
+		<!--自定义窗型-->
+		<mx:VBox width="100%" height="100%" paddingLeft="20" paddingRight="20" horizontalAlign="left" 
+				 visible="{item_m.cxType==1}" includeInLayout="{item_m.cxType==1}">
+			<mx:HBox width="100%" horizontalGap="-1" borderVisible="true" borderStyle="solid" borderColor="#87ceeb" >
+				<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="top" backgroundColor="#e5e5e5" >
+					<mx:HBox borderColor="#87ceeb" height="24" backgroundColor="#e5e5e5" width="100%" horizontalAlign="center" borderVisible="true" borderStyle="solid" paddingTop="-1">
+						<mx:LinkButton id="picName" label="{(item_m.picName==null||item_m.picName=='')?'[选择窗型]':'['+item_m.picName+']'}" click="picName_clickHandler(event)"/>
+						<mx:LinkButton id="modify" label="[公式修改]" click="modify_clickHandler(event)" visible="{item_m.picName}" includeInLayout="{item_m.picName}"/>
+
+					</mx:HBox>
+					<mx:Image source="{item_m.picName?FileUtil.winTmpPath+item_m.picName:null}" id="winPic" width="300" height="210" horizontalAlign="center" scaleContent="true" maintainAspectRatio="false"/>
+				</mx:VBox>
+				<mx:DataGrid id="dataGrid" dataProvider="{item_m.blList}" width="110" height="100%" editable="true" 
+							 itemEditEnd="dataGrid_itemEditEndHandler(event)" headerHeight="23">
+					<mx:columns>
+						<mx:DataGridColumn headerText="变量" width="50" textAlign="left" editable="false" dataField="blName"/>
+						<mx:DataGridColumn headerText="值" textAlign="left" dataField="blValue"/>
+					</mx:columns>
+				</mx:DataGrid>
+			</mx:HBox>
+		</mx:VBox>
+		<mx:FormItem label="注" labelWidth="20" indicatorGap="0" width="100%" paddingLeft="20" paddingRight="20">
+			<skins:BindTextInput data="{item_m}" dataField="bz" text="{item_m.bz}" width="100%" />
+		</mx:FormItem>
+		<mx:ControlBar paddingBottom="2">
+			<mx:Button label="保存" click="save()" buttonMode="true" />
+			<mx:Button label="关闭" click="close()" buttonMode="true" />
+		</mx:ControlBar>
+	</mx:VBox>
+</s:TitleWindow>

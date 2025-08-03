@@ -1,0 +1,633 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="销售单" close="closeDoc()"
+			   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="onComplete()"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="850" height="100%" 
+			   xmlns:autoComplete="flex.ui.spark.autoComplete.*" backgroundColor="#ffffff" currentState="NORMAL">
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		.bigLabel{
+			fontFamily:"黑体";
+			fontSize:18;
+		}
+		.dataGrid_1{
+			header-background-skin:ClassReference("skins.my.PrintDataGridHeadSkin");
+			header-style-name:myDataGridHeaderSeparatorSkin;
+			color:#000000;
+			vertical-grid-lines:true;
+			vertical-grid-line-color:#000000;
+			horizontal-grid-lines:true;
+			horizontal-grid-line-color:#000000;
+			alternating-item-colors:#ffffff,#ffffff;
+			padding-top:0;
+			padding-bottom:0;
+			selection-color:#ffffff;
+			text-selected-color:#000000;
+			roll-over-color:#cccccc;
+			text-roll-over-color:#000000;
+			font-family:'宋体';
+			font-weight:normal;
+		}
+		.myDataGridHeaderSeparatorSkin{
+			border-style:solid;
+			border-visible:true;
+			border-color:#000000;
+		}
+	</fx:Style>
+	<fx:Script>
+		<![CDATA[
+			import common.ArrayCollectionUtil;
+			import common.BigDecimal;
+			import common.ChineseConvert;
+			import common.DataCmdEvent;
+			import common.DateFormatHelper;
+			import common.FileUtil;
+			import common.RMBHelper;
+			
+			import entity.AccountStat;
+			import entity.CodeSet;
+			import entity.Customer;
+			import entity.Material;
+			import entity.Sell;
+			import entity.SellDetail;
+			import entity.enum.DataState;
+			import entity.enum.ModuleCode;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.ListCollectionView;
+			import mx.controls.Alert;
+			import mx.controls.List;
+			import mx.core.Application;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.DataGridEventReason;
+			import mx.events.ListEvent;
+			import mx.formatters.DateFormatter;
+			import mx.managers.PopUpManager;
+			import mx.printing.FlexPrintJob;
+			import mx.printing.PrintDataGrid;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			import spark.components.Application;
+			[Bindable] public var editable:Boolean=true;
+			[Bindable] private var sell:Sell;
+			[Bindable]
+			public var customerArray:ArrayCollection;
+			
+			private function onComplete():void{
+				
+				if(new File(FileUtil.qrCode).exists){
+					qrcode.source=FileUtil.qrCode;
+				}
+			}
+			public function setData(_doc:Sell):void{
+				sell=_doc;
+				if(sell.details==null){
+					sell.details=new ArrayCollection();
+				}
+				if(sell.details.length==0){
+					sell.details.addItem(new SellDetail());
+				}
+				if(sell.state==DataState.SAVED){
+					editable=true;
+				}else{
+					editable=false;
+				}
+				if(customerArray==null){
+					customerArray=Customer.getCustomers();
+				}
+			}
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(sell.details!=null&&sell.details.length>0){
+					return ""+(sell.details.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			private function priceLabelFunction(data:Object,col:DataGridColumn):String{
+				if(data.loss!=null&&data.loss>1){
+					return data.loss+"×"+data.price;
+				}else{
+					return data.price;
+				}			
+			}
+			protected function dataGrid_itemEditEndHandler(event:DataGridEvent):void{
+				if(event.reason==DataGridEventReason.CANCELLED)
+				{
+					return;
+				}
+				var detail:SellDetail = event.itemRenderer.data as SellDetail;
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				if(event.dataField=="number"){
+					if(isNaN(Number(ti.text))){
+						event.preventDefault();
+						ti.errorString="输入格式错误";
+						return;
+					}
+					detail.number=int(ti.text);
+				}else if(event.dataField=="memo"){
+					detail.memo = ti.text;
+				}
+			}
+			public function delDetail(detail:SellDetail):void{
+				if(detail!=null){
+					//若最后一条,不删除,仅清空信息
+					if(sell.details==null||sell.details.length==1){
+						var detail:SellDetail = sell.details.getItemAt(0) as SellDetail;
+						detail.clear();
+					}else{
+						if(detail.id>0){
+							if(sell.delDetails==null){
+								sell.delDetails=new ArrayCollection();
+							}
+							sell.delDetails.addItem(detail);
+						}
+						sell.details.removeItemAt(sell.details.getItemIndex(detail));
+					}
+					calcTotalAmount();
+				}
+			}
+			/* public function rowCount():void{
+				dataGrid.rowCount=(sell.details==null||sell.details.length<1)?1:sell.details.length;
+			}  */
+			/**自动保存 不判断条件,不满足的也存入*/
+			private function save(auto:Boolean=false):void{
+				if(sell.details==null||sell.details.length==0){
+					if(!auto){
+						Alert.show("销售明细不能为空","提示");
+					}
+					return;
+				}
+				var hasOne:Boolean=true;
+				for each(var detail:SellDetail in sell.details){
+					if(detail.materialName==""||StringUtil.trim(detail.materialName).length==0){
+						hasOne=false;
+						break;
+					}
+				}
+				if(!hasOne){
+					Alert.show("物品名不能为空","提示");
+					return;
+				}
+				//主表保存
+				var id:int = sell.id;
+				sell.isSaved=true;
+				sell.state=DataState.SAVED;
+				if(sell.code==null||sell.code==""){
+					sell.code=CodeSet.getCode(ModuleCode.SELL);
+				}
+				if(sell.id>0){
+					Sell.update(sell);
+				}else{
+					sell.createTime=DateFormatHelper.Format10(new Date());
+					id=Sell.insert(sell);
+				}
+				//子表
+				insertOrUpdateDetail(id);
+				//删除子表
+				deleteDetail();
+				//重新获取一次
+				setData(Sell.getSell(id));
+				Alert.show("保存成功","提示");
+			}
+			private function insertOrUpdateDetail(id:int):void{
+				if(sell.details!=null&&sell.details.length>0){
+					var detail:SellDetail;
+					for(var i:int=0;i<sell.details.length;i++){
+						detail=sell.details.getItemAt(i) as SellDetail;
+						if(detail.materialId==0&&detail.materialName==""){
+							continue;
+						}
+						detail.sellId=id;
+						if(detail.id>0){
+							SellDetail.update(detail);
+						}else{
+							SellDetail.insert(detail);
+						}
+					}
+				}
+			}
+			private function deleteDetail():void{
+				if(sell.delDetails!=null&&sell.delDetails.length>0){
+					var detail:SellDetail;
+					for(var i:int=0;i<sell.delDetails.length;i++){
+						detail=sell.delDetails.getItemAt(i) as SellDetail;
+						if(detail.id>0){
+							SellDetail.deleteOne(detail.id);
+						}
+					}
+				}
+			}
+			private function verifyDoc():void{
+				/*  RequestServer.getInstance().execute(sendController,"doVerify",sendDoc,function resultFun(result:ResultObject){
+				setData(result.data as SendDoc);
+				});   */
+			}
+			private function verifyBackDoc():void{
+				/* RequestServer.getInstance().execute(sendController,"doVerifyBack",sendDoc,function resultFun(result:ResultObject){
+				setData(result.data as SendDoc);
+				});  */
+			}
+			private function prints():void{
+				if(sell.details==null||sell.details.length==0){
+					Alert.show("销售明细不能为空","提示");
+					return;
+				}
+				for each(var detail:SellDetail in sell.details){
+					if(detail.amount==0){
+						Alert.show("金额不能为空","提示");
+						return;
+					}
+				}
+				
+				this.currentState="PRINT";
+				this.validateNow();
+				var printer:FlexPrintJob = new FlexPrintJob();
+				printer.printAsBitmap=false;
+				if (printer.start()){
+					trace("width:"+printId.width);
+					trace("height:"+printId.height);
+					printer.addObject(printId);
+					printer.send();
+				}
+				this.currentState="NORMAL";
+				this.validateNow();
+			}
+			private function setPrintStyle():void{
+				setStyle("fontFamily", "黑体");
+				setStyle("fontSize",18);			
+			}
+			private function closeDoc():void{
+				PopUpEffect.Hide(this);
+				PopUpManager.removePopUp(materialPanel);
+				//save(true);
+				sell = null;
+				dispatchEvent(new Event("REFRESH_SELL_MODULE"));
+			}
+			private var materialPanel:MaterialImportWindow = new MaterialImportWindow();
+			private function importMtl():void{
+				materialPanel.addEventListener(MaterialImportWindow.IMPORT,importMaterialResult);
+				materialPanel.addEventListener(MaterialImportWindow.CLOSE,colseImport);
+				PopUpManager.addPopUp(materialPanel,this,false);
+				materialPanel.x=(Capabilities.screenResolutionX-materialPanel.width-this.width-10)/2;
+				materialPanel.y=(Capabilities.screenResolutionY-materialPanel.height)/2;
+				changeXY();
+			}
+			
+			private function changeXY():void{
+				this.x=materialPanel.x+materialPanel.width+4;
+				this.y=(Capabilities.screenResolutionY-this.height)/2;
+			}
+			public function addMtl():void{
+				
+				if(sell.details==null){
+					sell.details=new ArrayCollection();
+				}
+				var detail:SellDetail=new SellDetail();
+				sell.details.addItem(detail);
+			}
+			private function colseImport(e:Event):void{
+				PopUpManager.centerPopUp(this);
+			}
+			/** 导入物料弹窗  回调函数*/
+			private function importMaterialResult(e:DataCmdEvent):void{
+				if(sell.details==null){
+					sell.details = new ArrayCollection();
+				}
+				var sellDetail:SellDetail;
+				var material:Material = e.data as Material;
+				if(sell.details.length==1){
+					var detail:SellDetail=sell.details.getItemAt(0) as SellDetail;
+					if(detail!=null&&detail.amount==0&&detail.materialName==""){
+						sellDetail=detail;
+						sellDetail.createByMaterial(material);
+					}
+				}
+				if(sellDetail==null){
+					sellDetail = new SellDetail();
+					sellDetail.createByMaterial(material);
+					sell.details.addItem(sellDetail);
+				}
+				//sell.details.refresh();
+				dataGrid.invalidateList();
+			}
+			private function customerSelect():void{
+				if(sell==null){
+					return;
+				}
+				if(customer.selectedItem==null){
+					sell.custId=0;
+					sell.custName="";
+					sell.custPhone="";
+					sell.custAddress="";
+					return;
+				}
+				var cust:Customer=customer.selectedItem as Customer;
+				sell.custId=cust.id;
+				sell.custName=cust.name;
+				sell.custPhone=cust.phone;
+				sell.custAddress=cust.address;
+			}
+			public function searchFunction(obj:Object):Boolean{
+				var str:String = "";
+				if(obj.hasOwnProperty("name")&&obj["name"]!=null){
+					str = (obj["name"] as String).toLowerCase();
+				}
+				if(str.search(customer.text.toLowerCase())>=0){
+					return true;
+				}else if(ChineseConvert.isChinese(str)
+					&&ChineseConvert.convertString(str).search(customer.text.toLowerCase())>=0){
+					return true;	
+				}else{
+					return false;
+				}	
+			}
+			public function calcTotalAmount():void{
+				//var amount:BigDecimal=new BigDecimal(0,0);
+				var amount:Number = 0;
+				if(sell.details!=null&&sell.details.length>0){
+					var detail:SellDetail;
+					for(var i:int=0;i<sell.details.length;i++){
+						detail=sell.details.getItemAt(i) as SellDetail;
+						//amount=new BigDecimal(amount.sum(detail.amount),6);
+						amount+=detail.amount;
+					}
+				}
+				sell.amount=Number(amount.toFixed());
+			}
+			public function calcAmount(detail:SellDetail):void{
+				var loss:Number=detail.loss==0?1:detail.loss;
+				//金额=数量*单价*损耗
+				/* var number:BigDecimal = new BigDecimal(detail.number);
+				var price:BigDecimal = new BigDecimal(detail.price);
+				detail.amount=new BigDecimal(number.mul(price)).mul(loss); */
+				detail.amount=Number((detail.number*detail.price*loss).toFixed(1));
+			}
+			
+			protected function finish(event:MouseEvent):void
+			{
+				Alert.show("是否确定完成，完成后单据将无法修改。",sell.code==""?"提示":sell.code,Alert.YES|Alert.NO,null,function(e:CloseEvent):void{
+					if(e.detail==Alert.YES){
+						Sell.changeState(sell.id,DataState.FINISHED);
+						setData(Sell.getSell(sell.id));
+						AccountStat.createBySell(sell);
+					}
+				});
+			}
+			
+		]]>
+	</fx:Script>
+	<s:states>
+		<s:State name="NORMAL"/>
+		<s:State name="PRINT"/>
+	</s:states>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox left="10" right="10" top="5" bottom="10" id="main" width="100%"  height="100%" verticalGap="0" >
+		<mx:VBox horizontalAlign="center" verticalAlign="middle" width="830">
+			<!--打印起始-->
+			<mx:VBox id="printId" width="100%" horizontalAlign="center" backgroundColor="#ffffff" verticalGap="2" 
+					 verticalScrollPolicy="off" horizontalScrollPolicy="off">
+				<!--表头开始-->
+				<mx:Canvas id="contentCan" width="100%" borderVisible="false">
+					<mx:VBox width="100%" verticalGap="5" horizontalAlign="center" verticalAlign="top" paddingTop="10" >
+						<s:Label fontFamily="黑体" fontSize="22" text="宁波市玉乾建材有限公司销售单"/>
+					</mx:VBox>
+					<mx:HBox paddingTop="2" paddingLeft="10" >
+						<mx:Image id="qrcode" width="70" height="70" scaleContent="true" maintainAspectRatio="false" />
+					</mx:HBox>
+					
+					<mx:HBox paddingTop="10" width="100%" horizontalAlign="left" >
+						<mx:Spacer width="680"/>
+						<mx:VBox verticalGap="2">
+							
+							<mx:Label textAlign="left" id="procId" text="No. {sell.code}" />
+							
+							<mx:Label text="{sell.createTime}" textAlign="left"/>
+							
+						</mx:VBox>
+					</mx:HBox>
+					
+					<mx:HBox verticalAlign="middle" horizontalAlign="left" paddingLeft="5" paddingBottom="5" width="100%" paddingTop="80">
+						<mx:FormItem label="客户：" indicatorGap="2" >
+							<autoComplete:AutoComplete id="customer" labelField="name" dataProvider="{customerArray}"
+													   searchMode="sync"  
+													   select="customerSelect()"
+													   selectedItem="{ArrayCollectionUtil.getItem(sell.custName,customerArray,'name')}"
+													   searchFunction="searchFunction" borderVisible="false"
+													   creationComplete="customer.openButton.visible=false;"
+													   mouseOver="customer.openButton.visible=true"
+													   mouseOut="customer.openButton.visible=false"
+													   skinClass="flex.ui.spark.autoComplete.AutoCompleteSkin"
+													   emptyString="- 无 -" textAlign="left"
+													   width="210" includeIn="NORMAL" enabled="{editable}"/>
+							<mx:Label text="{sell.custName}" textAlign="left" width="210" includeIn="PRINT"/>
+						</mx:FormItem>
+						<mx:FormItem label="联系电话：" indicatorGap="2" >
+							<mx:Label text="{sell.custPhone}" width="200" textAlign="left"/>
+						</mx:FormItem>
+						<mx:FormItem label="地址：" indicatorGap="2" >
+							<mx:Label text="{sell.custAddress}" textAlign="left" />
+						</mx:FormItem>
+						
+					</mx:HBox>
+				</mx:Canvas>
+				<!--表头结束-->
+				<!--列表开始-->
+				<mx:VBox width="100%" verticalGap="-1" paddingLeft="5" paddingRight="5">
+					<mx:DataGrid id="dataGrid" width="820" dataProvider="{sell.details}" borderStyle="solid" borderColor="black" borderVisible="true"
+								 sortableColumns="false" editable="{editable}" dragEnabled="false" resizableColumns="false" 
+								 rowCount="{(sell.details==null||sell.details.length)&lt;1?1:sell.details.length}" rowHeight="26" headerHeight="28"
+								 selectable="false" styleName="dataGrid_1"> <!---->
+						<mx:columns>
+							<mx:DataGridColumn width="40" editable="false" headerText="序号" labelFunction="indexLabelFunction" includeIn="PRINT"/>
+							<mx:DataGridColumn includeIn="NORMAL" width="40" editable="false">
+								<mx:headerRenderer>
+									<fx:Component>
+										<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle">
+											<mx:Image source="/img/add.png" click="outerDocument.addMtl()" buttonMode="true" toolTip="添加行" enabled="{outerDocument.editable}"/>
+										</mx:HBox>
+									</fx:Component>
+								</mx:headerRenderer>
+								<mx:itemRenderer> 
+									<fx:Component>
+										<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle" >
+											<fx:Script>
+												<![CDATA[
+													import entity.SellDetail;
+												]]>
+											</fx:Script>
+											<mx:Image source="/img/del.png" click="outerDocument.delDetail(data as SellDetail)" buttonMode="true" toolTip="删除行" enabled="{outerDocument.editable}"/>
+										</mx:HBox>
+									</fx:Component>
+								</mx:itemRenderer>
+							</mx:DataGridColumn>
+							<mx:DataGridColumn headerText="物品名称" editable="true" width="210" dataField="materialName" >
+								<mx:itemEditor>
+									<fx:Component>
+										<mx:TextInput />
+									</fx:Component>
+								</mx:itemEditor>
+							</mx:DataGridColumn>
+							<mx:DataGridColumn headerText="单位" width="55" dataField="unit" editable="true">
+								<mx:itemEditor>
+									<fx:Component>
+										<mx:TextInput maxChars="5"/>
+									</fx:Component>
+								</mx:itemEditor>
+							</mx:DataGridColumn>
+							<mx:DataGridColumn headerText="数量" width="100" dataField="numberMemo" textAlign="right">
+								<mx:itemEditor>
+									<fx:Component>
+										<mx:TextInput textAlign="right" 
+													  restrict="0-9.\*\-\+\/" focusOut="_focusOutHandler(event)" >
+											<fx:Script>
+												<![CDATA[
+													import common.DataFormat;
+													import common.DateFormatHelper;
+													import r1.deval.D;
+													import entity.SellDetail;
+													
+													import mx.events.FlexEvent;
+													protected function _focusOutHandler(event:FocusEvent):void
+													{
+														if(isNaN(event.target.text)){
+															data.number = DataFormat.formatNumber1((D.eval(event.target.text)));
+														}else{
+															data.number = Number(event.target.text);
+														}
+														data.numberMemo = event.target.text;
+														outerDocument.calcAmount(data as SellDetail);
+														outerDocument.calcTotalAmount();
+													}
+												]]>
+											</fx:Script>
+										</mx:TextInput>
+											
+											
+									</fx:Component>
+								</mx:itemEditor>
+							</mx:DataGridColumn>
+							<mx:DataGridColumn headerText="单价" width="95" textAlign="right" labelFunction="priceLabelFunction"> <!---->
+								<mx:itemEditor>
+									<fx:Component>
+											<mx:TextInput focusIn="priceText_focusInHandler(event)" 
+														  restrict="0-9." focusOut="textinput2_focusOutHandler(event)"
+														  width="100%" >
+												<fx:Script>
+													<![CDATA[
+														import entity.SellDetail;
+														
+														import mx.events.FlexEvent;
+														protected function textinput2_focusOutHandler(event:FocusEvent):void
+														{
+															var t:TextInput =event.currentTarget as TextInput;
+															if(isNaN(Number(t.text))){
+																return;
+															}
+															data.price = Number(t.text);
+															outerDocument.calcAmount(data as SellDetail);
+															outerDocument.calcTotalAmount(); 
+															if(data.loss!=null&&data.loss>1){
+																t.text = data.loss+"×"+data.price;
+															}else{
+																t.text = data.price;
+															}
+															//不刷新导致labelfunction不执行
+															outerDocument.dataGrid.invalidateList();
+														}
+														
+														
+														protected function priceText_focusInHandler(event:FocusEvent):void
+														{
+															var t:TextInput =event.currentTarget as TextInput;
+															t.text = data.price;
+														}
+														
+													]]>
+												</fx:Script>
+											</mx:TextInput>
+										
+									</fx:Component>
+								</mx:itemEditor>
+							</mx:DataGridColumn>
+							<mx:DataGridColumn headerText="金额" width="80" dataField="amount" textAlign="right" >
+								<mx:itemEditor>
+									<fx:Component>
+										<mx:TextInput restrict="0-9." focusOut="_focusOutHandler(event)" text="{data.amount}">
+											<fx:Script>
+												<![CDATA[
+													import common.BigDecimal;
+													
+													protected function _focusOutHandler(event:FocusEvent):void
+													{
+														//data.amount = Number(amountText.text);
+														if(data.number>0){
+															var amount:BigDecimal = new BigDecimal(data.amount);
+															var loss:BigDecimal = new BigDecimal(data.loss==0?1:data.loss);
+															var number:BigDecimal = new BigDecimal(data.number);
+															data.price=new BigDecimal(amount.div(loss)).div(number);
+														}
+														outerDocument.calcTotalAmount();
+													}
+												]]>
+											</fx:Script>
+										</mx:TextInput>
+									</fx:Component>
+								</mx:itemEditor>
+							</mx:DataGridColumn>
+							<mx:DataGridColumn headerText="备注" dataField="memo" width="230">
+								<mx:itemEditor>
+									<fx:Component>
+										<mx:TextInput />
+									</fx:Component>
+								</mx:itemEditor>
+							</mx:DataGridColumn>
+						</mx:columns>
+					</mx:DataGrid>
+					<!--列表结束-->
+					<mx:VBox width="100%" verticalGap="-1" horizontalGap="0" >
+						<mx:HBox height="30" width="100%" horizontalAlign="center" horizontalGap="-1" verticalGap="-1"
+								 borderVisible="true" borderColor="black" borderStyle="solid" verticalAlign="middle">
+							
+							<mx:HBox horizontalGap="0" horizontalAlign="center" height="100%" verticalAlign="middle">
+								<s:Label text="总金额：" styleName="bigLabel"/>
+								<s:Label text="{RMBHelper.parseRMB(sell.amount)}" styleName="bigLabel"/>
+								<s:Label text="(￥{sell.amount}元)" styleName="bigLabel"/>
+							</mx:HBox>
+						</mx:HBox>
+						<mx:HBox width="100%" horizontalAlign="left" horizontalGap="0" paddingTop="1"  verticalAlign="top"
+								 borderVisible="true" borderColor="black" borderStyle="solid" visible.PRINT="false" includeInLayout.PRINT="false">
+							
+							<s:Label styleName="myLabel" text="备注：" />
+							<s:TextArea width="100%" id="noteId" text="{sell.memo}" change="sell.memo=noteId.text"
+										heightInLines="2" paddingBottom="0" paddingLeft="2" maxChars="110" editable="{editable}"
+										paddingRight="2" paddingTop="0" styleName="myTextInput_1"/>
+						</mx:HBox>
+						<mx:VBox width="100%" horizontalAlign="left" verticalGap="2" paddingTop="10"
+								 verticalAlign="middle" visible.NORMAL="false" includeInLayout.NORMAL="false">
+							<s:Label text="公司地址：鄞州区下应镇金谷中路18号（老章铝材）         "/>
+							<s:Label text="专营：坚美、丰毅铝合金及配件      联系人：章先生 83072271 13486648098             收货人：" />
+						</mx:VBox>
+					</mx:VBox>
+				</mx:VBox>
+			</mx:VBox>
+			<!--打印结束-->
+			<!--按钮行开始-->
+			<mx:HBox width="100%" height="30" paddingTop="5" verticalAlign="middle" horizontalAlign="center" horizontalGap="5">
+				<mx:Button label="导入" enabled="{sell.state==DataState.SAVED}" width="60" height="24" click="importMtl()" />
+				<mx:Button label="保存" enabled="{sell.state==DataState.SAVED}"  width="60" height="24" click="save()" />
+				<mx:Button label="完成" enabled="{sell.state==DataState.SAVED}"  width="60" height="24" click="finish(event)" />
+				<mx:Button label="打印"  width="60" height="24" click="prints()" />
+				<mx:Button label="关闭"  width="60" height="24" click="closeDoc()"/>
+			</mx:HBox>
+			<!--按钮行结束-->
+		</mx:VBox>
+	</mx:VBox>
+	
+</s:TitleWindow>
+

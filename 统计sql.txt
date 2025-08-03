@@ -1,0 +1,23 @@
+--2019年各颜色窗户个数
+select color 颜色,sum(num) 窗户个数
+from orderdetails where orderid in (select id from Orders where xdtime like '%2019%') group by color 
+
+--统计窗户平方数
+select a.name,sum(num) 窗户个数,ifnull(ROUND(sum(d.width*d.height*0.0001),1),0)+ifnull(ROUND(sum(allab.width*allab.height*0.0001),1),0)平方米
+from Orders o left join OrderDetails d on o.id=d.orderid left join alupro a on a.id=d.ylType
+left join (
+	--得到所有的A和B总长度
+	SELECT detailid,sum(CASE WHEN blname='A' THEN blvalue ELSE 0 END) AS width,
+	sum(CASE WHEN blname='B' THEN blvalue ELSE 0 END) AS height 
+	FROM OrderDetailBL group by detailid
+) allab on allab.detailid = d.id 
+where o.xdtime like '%2019%' and name is not null group by a.name 
+
+
+#新增成本核算
+alter table aluprodetail add unitWeight float;
+alter table aluprodetail add unitWeightDouble float;
+
+alter table alupro add loss float;
+alter table alupro add price float;
+ 

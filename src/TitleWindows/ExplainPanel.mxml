@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" verticalCenter="0" horizontalCenter="0" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="550" height="500" title="软件使用说明" close="close()">
+	<fx:Script>
+		<![CDATA[
+			import entity.Regs;
+			
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			
+			import skins.PopUpEffect;
+			
+			private function close():void{
+				PopUpEffect.Hide(this);
+			}
+			private var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			protected function image1_clickHandler(event:MouseEvent):void
+			{
+				Regs.delRegs();
+				Alert.show("注册信息清空成功！","提示");
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%" verticalAlign="top" horizontalAlign="left" paddingLeft="10" paddingRight="10" paddingTop="10" paddingBottom="10" verticalGap="10">
+		<mx:HBox width="100%" verticalAlign="top" horizontalAlign="center">
+			<mx:Image source="img/App64.png" doubleClickEnabled="true" doubleClick="image1_clickHandler(event)"/>
+			<mx:VBox verticalGap="11">
+				<mx:Label text="玉乾下料系统" fontSize="21" fontWeight="bold"/>
+				<mx:Label text="宁波玉乾建材有限公司" fontSize="16" />
+			</mx:VBox>
+		</mx:HBox>
+		<s:Spacer height="240"/>
+		<mx:HBox verticalAlign="middle" horizontalAlign="left">
+			<mx:VBox>
+				<mx:Label text="  任何公司单位或个人未经允许" />
+				<mx:Label text="  不得将本软件移出贵公司范围以外地方使用" />
+				<mx:Label text="  最终解释权归宁波玉乾建材有限公司所有" />
+				<mx:Label text="  详细说明和获取软件更新请关注玉乾微信公众号"/>
+			</mx:VBox>
+			<mx:VBox width="100%" horizontalAlign="right">
+				<mx:Image source="img/YQqrcode.png" scaleContent="true" maintainAspectRatio="false" width="120" height="120"/>
+			</mx:VBox>
+		</mx:HBox>
+		
+		
+	</mx:VBox>
+</s:TitleWindow>

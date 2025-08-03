@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="颜色配置" creationComplete="getColor();"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="400" height="450" close="PopUpEffect.Hide(this);"
+			   horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" >
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			
+			import entity.Colors;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			public var delArray:ArrayCollection;
+			
+			private var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			public function getColor():void
+			{
+				this.dataArray=Colors.getColors();
+			}
+			
+			protected function createColor(event:MouseEvent):void
+			{
+				var color:Colors=new Colors();
+				if(dataArray==null){
+					dataArray=new ArrayCollection();
+				}
+				dataArray.addItem(color);
+			}
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			
+			protected function dataGrid_itemEditEndHandler(event:DataGridEvent):void
+			{
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				var text:String=ti.text;
+				var color:Colors=dataGrid.selectedItem as Colors;
+				color.color=text;
+				//这个方法不能刷新dataArray 不然会执行2次
+				if(color.id==0){
+					insert(color);
+				}else{
+					update(color);
+				}
+			}
+			private function insert(color:Colors):void{
+				statement.text = "insert into Colors(color,state)"+
+					"values('"+color.color+"','"+color.state+"')";
+				statement.execute();
+				var result:SQLResult=statement.getResult();
+				var id:int=result.lastInsertRowID;
+				color.id=id;
+			}
+			private function update(color:Colors):void{
+				statement.text = "update Colors set color='"+color.color+"',state='"+color.state+"' where id="+color.id;
+				statement.execute();
+			}
+			
+			protected function deleteColors(event:MouseEvent):void
+			{
+				Alert.show("删除后数据不可恢复，是否继续？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler);
+				
+					
+			}
+			private function alertCloseHandler(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					statement.text = "delete from Colors where id="+dataGrid.selectedItem.id+"";
+					statement.execute();
+					getColor();
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox verticalGap="2" width="100%" height="100%">
+		<mx:HBox width="100%" paddingLeft="2" paddingTop="2" paddingBottom="2"
+				 verticalAlign="middle" horizontalGap="4" >
+			<mx:Button label="新建" height="24" click="createColor(event)"/>
+			<mx:Button label="删除" height="24" click="deleteColors(event)" enabled="{dataGrid.selectedItem!=null}"/>
+		</mx:HBox>
+		<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" editable="true" itemEditEnd="dataGrid_itemEditEndHandler(event)">
+			<mx:columns>
+				<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40" editable="false"/>
+				<mx:DataGridColumn dataField="color" headerText="颜色" textAlign="left" width="100" />
+				<mx:DataGridColumn dataField="state" width="55" headerText="状态" editable="false">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" dataChange="zty(data)">				
+								<mx:Image id="pic" />
+								<fx:Script>
+									<![CDATA[
+										import entity.Colors;
+										
+										import mx.core.FlexGlobals;
+										private function zty(u:Object):void{
+											var data:Colors=u as Colors;
+											if(data!=null){
+												if(data.state=="Y"){
+													pic.source = FlexGlobals.topLevelApplication.YES_IMG;
+													pic.toolTip = "已启用";
+												}else{
+													pic.source = FlexGlobals.topLevelApplication.NO_IMG;
+													pic.toolTip = "已停用";
+												}
+											}
+										}
+									]]>
+								</fx:Script>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>	
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+	</mx:VBox>
+</s:TitleWindow>

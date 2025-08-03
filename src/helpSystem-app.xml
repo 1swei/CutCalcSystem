@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<application xmlns="http://ns.adobe.com/air/application/3.1">
+<id>CutCalcSystem</id>
+
+	<filename>玉乾下料</filename>
+
+	<name>玉乾下料</name>
+	<versionNumber>5.9</versionNumber>
+	<description>玉乾下料</description>
+
+	<copyright>玉乾下料</copyright>
+
+	<initialWindow>
+		<content>helpSystem.swf</content>
+		<title>玉乾下料</title>
+		<systemChrome>standard</systemChrome>
+		<!--舞台透明 -->
+<!-- 		<transparent>true</transparent> -->
+		<!--用户是否能调整窗口大小 -->
+ 		<resizable>true</resizable>
+	</initialWindow>
+	<icon>
+		<image16x16>img/App16.png</image16x16>
+		<image32x32>img/App32.png</image32x32>
+		<image48x48>img/App48.png</image48x48>
+		<image128x128>img/App128.png</image128x128>
+	</icon>
+	<supportedProfiles>extendedDesktop desktop</supportedProfiles>
+</application>

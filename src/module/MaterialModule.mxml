@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="oncomplete(event)"
+		   xmlns:mx="library://ns.adobe.com/flex/mx" layout="absolute" width="100%" height="100%" xmlns:skins="skins.*" xmlns:ns="http://code.google.com/p/flexlib/" xmlns:my="skins.my.*" >
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import TitleWindows.MaterialGroupPanel;
+			
+			import common.ArrayCollectionUtil;
+			import common.CopyUtil;
+			
+			import entity.Material;
+			import entity.MaterialType;
+			
+			import flash.utils.setTimeout;
+			
+			import flashx.textLayout.operations.CopyOperation;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.remoting.RemoteObject;
+			
+			import skins.PopUpEffect;
+			
+			import util.TreeUtil;
+			[Bindable]
+			private var materialTreeTypes:ArrayCollection;
+			[Bindable]
+			private var materialAllTypes:ArrayCollection;
+			[Bindable]
+			private var materials:ArrayCollection;//物料集合
+			
+			[Bindable]
+			private var selectedType:MaterialType;//tree当前选中的类型
+			[Bindable]
+			private var theMaterial:Material;//当前操作的物料
+			protected function oncomplete(event:FlexEvent):void
+			{
+				initType();
+				initMaterials();
+			}
+			var childMenu:ArrayCollection;
+			private function initMaterials():void{
+				var obj:Object = new Object();
+				obj.typeId = tree.selectedItem==null?0:tree.selectedItem.id;
+				obj.showNoUsing = showNoUsing.selected;
+				obj.context = context.text;
+				if(obj.typeId>0){//根据类别筛选
+					obj.typeIds = getSelectTypeIds();
+				}
+				materials=Material.findByParam(obj);
+			}
+			
+			public function appendID(menuList:ArrayCollection, pid:int):ArrayCollection{
+				
+				for(var i:int;i<menuList.length;i++){
+					//遍历出父id等于参数的id，add进子节点集合
+					if(menuList[i].parentId==pid){
+						//递归遍历下一级
+						appendID(menuList,menuList[i].id);
+						childMenu.addItem(menuList[i].id);
+					}
+				}
+				return childMenu;
+			}
+
+			
+			private function initType():void{
+				materialTreeTypes = MaterialType.findAll(showTypeNoUsing.selected);
+				materialAllTypes = MaterialType.findAll(true);;
+				materialTreeTypes = buildTree(materialTreeTypes, 0);
+				TreeUtil.expandTree(tree);
+				selectedType=null;
+			}
+			private function buildTree(list:ArrayCollection, parentId:int):ArrayCollection{
+				var _materialTypes:ArrayCollection = new ArrayCollection();
+				for (var i:int=0;i<list.length;i++) {
+					var id:int = (list[i] as MaterialType).id;
+					var upperId:int = (list[i] as MaterialType).parentId;
+					if (parentId == upperId) {
+						var types:ArrayCollection = buildTree(list, id);
+						
+						(list[i] as MaterialType).children=types;
+						_materialTypes.addItem(list[i] as MaterialType);
+					}
+				}
+				return _materialTypes;
+			}
+			//TREE控件右键菜单
+			private function showrightMenu():void{
+				tree.contextMenu = createTreeMenuItem();
+			}
+			/**工艺类别右键菜单*/
+			private function createTreeMenuItem():NativeMenu{ 
+				var menu:NativeMenu = new NativeMenu();
+			 	var addbmb:NativeMenuItem;
+				var editbmb:NativeMenuItem;
+				var delbmb:NativeMenuItem;
+				menu_insert(menu);
+				if(selectedType!=null){
+					menu_modify(menu);
+					menu_updateState(menu);
+					menu_delete(menu);
+				} 
+				return menu;
+			}
+			/**右键菜单--删除*/
+			private function menu_delete(menu:NativeMenu):void
+			{
+				var menuName:String="删除("+selectedType.name+")类别";
+				var menuItem:NativeMenuItem = new NativeMenuItem(menuName);
+				menuItem.addEventListener(Event.SELECT, function():void{
+					doDeleteType();
+					menuItem.removeEventListener(Event.SELECT,arguments.callee);
+				});
+				menu.addItem(menuItem);
+			}
+			/**右键菜单--新增*/
+			private function menu_insert(menu:NativeMenu):void
+			{
+				var menuName:String="添加顶级类别";
+				if(selectedType!=null){
+					menuName="添加("+selectedType.name+")下级类别";
+				}
+				var menuItem:NativeMenuItem = new NativeMenuItem(menuName);
+				menuItem.addEventListener(Event.SELECT, function():void{
+					addType();
+					menuItem.removeEventListener(Event.SELECT,arguments.callee);
+				});
+				menu.addItem(menuItem);
+			}
+			/**右键菜单--修改本级*/
+			private function menu_modify(menu:NativeMenu):void
+			{
+				var menuItem:NativeMenuItem = new NativeMenuItem("修改("+selectedType.name+")类别");
+				menuItem.addEventListener(Event.SELECT, 
+					function():void
+					{
+						editType();
+						menuItem.removeEventListener(Event.SELECT,arguments.callee);
+					});
+				menu.addItem(menuItem);
+			}
+			/**工艺类别右键菜单--启用停用*/
+			private function menu_updateState(menu:NativeMenu):void
+			{
+				var updateCategoryState:NativeMenuItem;
+				if(selectedType.isUsing) 
+				{
+					updateCategoryState =  new  NativeMenuItem( "停用("+selectedType.name+")类别" );
+				}
+				else 
+				{
+					updateCategoryState =  new  NativeMenuItem( "启用("+selectedType.name+")类别" );
+				}
+				updateCategoryState.addEventListener(Event.SELECT, function():void{doUpdateCategoryState(selectedType.isUsing)});
+				menu.addItem(updateCategoryState); //将菜单项加入菜单
+			}
+			/**
+			 * 类别：启用|停用
+			 * */
+			public function doUpdateCategoryState(using:Boolean):void
+			{
+				Alert.show("该类别下的物料都将被"+(using?"停用":"启用")+"，是否继续？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler);
+			}
+			private function alertCloseHandler(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					selectedType.isUsing = !selectedType.isUsing;
+					var typeIds:ArrayCollection=getSelectTypeIds();
+					MaterialType.changeUsing(typeIds,selectedType.isUsing);
+					Material.changeMtlUsing(typeIds,selectedType.isUsing);
+					tree.selectedItem=null;
+					initType();
+					initMaterials();
+				}
+			}
+			/**
+			 * 类别：删除
+			 * */
+			public function doDeleteType():void
+			{
+				Alert.show("该类别下的物料都将被删除，是否继续？","警告",Alert.YES|Alert.CANCEL,null,function (e:CloseEvent):void{
+					if(e.detail==Alert.YES){
+						var typeIds:ArrayCollection=getSelectTypeIds();
+						MaterialType.del(typeIds);
+						Material.deleteByTypes(typeIds);
+						tree.selectedItem=null;
+						initType();
+						initMaterials();
+					}
+				});
+			}
+			private function getSelectTypeIds():ArrayCollection{
+				selectedType = tree.selectedItem as MaterialType;
+				childMenu = new ArrayCollection();
+				var allTypes:ArrayCollection = CopyUtil.clone(materialAllTypes) as ArrayCollection;
+				allTypes=appendID(allTypes,selectedType.id);
+				allTypes.addItem(selectedType.id);
+				return allTypes;
+			} 
+			private function addType():void{
+				if(selectedType==null){
+					typeAddDoc.title = "添加顶级类别";
+				}else{
+					typeAddDoc.title = "添加("+selectedType.name+")下级类别";
+				}
+				
+				from_bt.addEventListener(MouseEvent.CLICK,addform);
+				typeAddDoc.visible = true;
+			}
+			private function addform(e:MouseEvent):void{
+				if(typeName.text==""){
+					Alert.show("必填项不能为空","提示");
+					return;
+				}
+				
+				var type:MaterialType=new MaterialType();
+				type.isUsing=true;
+				type.name=typeName.text;
+				type.parentId=selectedType==null?0:selectedType.id;
+				//TO DO 编码 
+				if(MaterialType.isRepeat(type)){
+					Alert.show("类别名称不能重复");
+					return;
+				}
+				MaterialType.insert(type);
+				closeAddWin();
+				from_bt.removeEventListener(MouseEvent.CLICK,addform);
+				initType();
+			}
+			private function editType():void{
+				typeAddDoc.title = "修改("+selectedType.name+")类别";
+				from_bt.addEventListener(MouseEvent.CLICK,editfrom);
+				typeName.text = selectedType.name;
+				typeAddDoc.visible = true;
+			}
+			
+			private function editfrom(e:MouseEvent):void{
+				if(typeName.text==""){
+					Alert.show("必填项不能为空","提示");
+					return;
+				}
+				selectedType.name=typeName.text;
+				if(MaterialType.isRepeat(selectedType)){
+					Alert.show("类别名称不能重复","提示");
+					return;
+				}
+				MaterialType.update(selectedType);
+				Material.changeMtlType(selectedType);
+				from_bt.removeEventListener(MouseEvent.CLICK,editfrom);
+				initType();
+				initMaterials();
+				closeAddWin();
+			}
+			protected function closeAddWin():void
+			{
+				// TODO Auto-generated method stub
+				typeAddDoc.visible=false;
+				typeName.text="";
+				//界面关闭务必清空事件,防止按钮绑定事件后,并没有点击执行,防止多个事件一起执行
+				from_bt.removeEventListener(MouseEvent.CLICK,addform);
+				from_bt.removeEventListener(MouseEvent.CLICK,editfrom);
+			}
+			protected function tree_changeHandler(event:ListEvent):void
+			{
+				selectedType=Tree(event.target).selectedItem as MaterialType;
+				initMaterials();
+			}
+			
+			private function typeLabelFun(obj:Object):String{
+				return obj.name+" ("+obj.code+")";
+			}
+			
+			protected function showMaterial(material:Material):void{
+				if(material.id==0){
+					if(tree.selectedItem==null||selectedType==null){
+						Alert.show("请选择物料类型后再进行新建","提示");
+						return;
+					}
+					//新建赋值
+					material.code=selectedType.code;//暂时把类型编码赋给物料
+					material.typeId = selectedType.id;
+					material.typeName = selectedType.name;
+					material.isUsing=true;
+				}
+				theMaterial=material;
+				mtlDoc.visible=true;
+				treeCombox.selected(theMaterial.typeId.toString(),materialTreeTypes);
+				treeCombox.validateNow();
+			}
+			private function closeMtlDoc():void{
+				theMaterial=null;
+				this.mtlDoc.visible=false;
+				treeCombox.selectedIndex=-1;
+			}
+			
+			protected function saveMtl(event:MouseEvent):void{
+				if(theMaterial.name==""||theMaterial.name==null){
+					Alert.show("物料名称不能为空","提示");
+					return;
+				}
+				if(Material.isRepeat(theMaterial)){
+					Alert.show("物料 [品牌+名称+单位] 不能重复","提示");
+					return;
+				}
+				if(theMaterial.typeId==0||theMaterial.typeName==""){
+					Alert.show("类别不能为空","提示");
+					return;
+				}
+				if(theMaterial.id>0){
+					Material.update(theMaterial);
+				}else{
+					Material.insert(theMaterial);
+				}
+				initMaterials();
+				closeMtlDoc();
+			}
+			private function stateLabelFormat(obj:Object,col:DataGridColumn=null):String{
+				if(obj.isUsing){
+					return "已启用";
+				}else{
+					return "已停用";
+				}
+			}
+			
+			private function getMaterial(mtlId:int):void{
+				var arr:ArrayCollection=Material.findOne(mtlId);
+				showMaterial(arr.getItemAt(0) as Material);
+			}
+			public function changeState(item:Material):void{
+				item.isUsing=!item.isUsing;
+				Material.update(item);
+				initMaterials();
+			}
+			
+			protected function tree_itemClickHandler(event:ListEvent):void
+			{
+				/* var item:Object = Tree(event.currentTarget).selectedItem;
+				if (tree.dataDescriptor.isBranch(item)) {
+					tree.expandItem(item, !tree.isItemOpen(item), true);
+				} */
+			}
+			
+			protected function changeType(event:ListEvent):void
+			{
+				var type:MaterialType = event.currentTarget.treeSelectedItem as MaterialType;
+				if(type!=null){
+					theMaterial.code=type.code;
+					theMaterial.typeId=type.id;
+					theMaterial.typeName=type.name;
+				}
+			}
+			private function showBindGroup():void{
+				var bindPanel:MaterialGroupPanel=new MaterialGroupPanel();
+				PopUpEffect.Show(bindPanel,FlexGlobals.topLevelApplication.parent,false);
+			}
+		]]>
+	</fx:Script>
+	<mx:HDividedBox width="100%" height="100%">
+		<mx:VBox width="200" height="100%" horizontalAlign="center" >
+			<mx:CheckBox label="显示已停用" change="initType();" id="showTypeNoUsing"/>
+			<mx:Tree id="tree" width="100%" height="100%" dataProvider="{materialTreeTypes}" labelField="name"
+					 showRoot="true" textAlign="left" itemClick="tree_itemClickHandler(event)" 
+					 creationComplete="showrightMenu()" contextMenu="showrightMenu()" change="tree_changeHandler(event)" />
+		</mx:VBox>
+	
+		<mx:VBox width="100%" height="100%">
+			<mx:HBox width="100%">
+				<mx:Button label="新建" click="showMaterial(new Material())" />
+				<mx:Button label="物料组合" click="showBindGroup()"/>
+				<ns:PromptingTextInput id="context" prompt="综合搜索" enter="initMaterials()"/>
+				<mx:CheckBox id="showNoUsing" label="显示已停用" change="initMaterials()" />
+			</mx:HBox>
+			<mx:DataGrid id="materialGrid" width="100%" height="100%" dataProvider="{materials}" itemDoubleClick="getMaterial((materialGrid.selectedItem as Material).id)"
+						 doubleClickEnabled="true" >
+				<mx:columns>
+					<!--<mx:DataGridColumn headerText="编号" dataField="code"/>-->
+					<mx:DataGridColumn headerText="类别" dataField="typeName" textAlign="left"/>
+					<mx:DataGridColumn headerText="品牌" dataField="brand" textAlign="left"/>
+					<mx:DataGridColumn headerText="名称" dataField="name" textAlign="left"/>
+					<mx:DataGridColumn headerText="规格"  dataField="spec" textAlign="left"/>
+					<mx:DataGridColumn headerText="单位" dataField="unit" />
+					<mx:DataGridColumn headerText="单价" dataField="price" textAlign="right"/>
+					<mx:DataGridColumn headerText="损耗" dataField="loss" textAlign="right"/>
+					<mx:DataGridColumn headerText="状态" labelFunction="stateLabelFormat"/>
+					<mx:DataGridColumn headerText="操作">
+						<mx:itemRenderer>
+							<fx:Component>
+								<mx:HBox horizontalAlign="center">
+									<fx:Script>
+										<![CDATA[
+											import entity.Material;
+											
+										]]>
+									</fx:Script>
+									<mx:Button label="{data.isUsing?'停用':'启用'}" click="outerDocument.changeState(entity.Material(data))"/>
+								</mx:HBox>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+				</mx:columns>
+			</mx:DataGrid>
+		</mx:VBox>
+	</mx:HDividedBox>
+	<mx:HBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+		<s:TitleWindow width="277" height="177" visible="false" id="typeAddDoc" close="closeAddWin()">
+			<mx:VBox width="90%" height="90%" verticalAlign="middle" verticalGap="13" horizontalAlign="center">
+				<mx:FormItem label="类别名称" labelWidth="100" required="true">
+					<mx:TextInput id="typeName" width="135" />
+				</mx:FormItem>
+				<s:Button id="from_bt" label="确定" />
+			</mx:VBox>
+		</s:TitleWindow>
+	</mx:HBox>
+	<s:TitleWindow visible="false" id="mtlDoc" width="360" height="400" close="closeMtlDoc()"
+				   title="物料属性" verticalCenter="0" horizontalCenter="0">
+		<mx:VBox verticalAlign="middle" horizontalAlign="center" width="100%" height="100%" >
+			<mx:FormItem label="物料类别" labelWidth="120" >
+				<my:TreeCombox id="treeCombox" dataProvider="{materialTreeTypes}" textAlign="left" labelField="name" width="170" change="changeType(event)"
+							   text="{treeCombox.treeSelectedItem.name}"/>
+				<!--<mx:ComboBox id="typeCombox" width="170" dataProvider="{materialAllTypes}" textAlign="left" labelField="name"
+							 selectedIndex="{ArrayCollectionUtil.getIndex(theMaterial.typeId,materialAllTypes,'id')}" change="changeType(event)"/>-->
+			</mx:FormItem>
+			
+			<mx:FormItem label="编号" labelWidth="120">
+				<skins:BindTextInput enabled="false" dataField="code" data="{theMaterial}" text="{theMaterial.code}" width="170"/>
+			</mx:FormItem>
+			<mx:FormItem label="品牌" labelWidth="120">
+				<skins:BindTextInput dataField="brand" data="{theMaterial}" text="{theMaterial.brand}" width="170"/>
+			</mx:FormItem>
+			<mx:FormItem label="名称" labelWidth="120" required="true">
+				<skins:BindTextInput dataField="name" data="{theMaterial}" text="{theMaterial.name}" width="170"/>
+			</mx:FormItem>
+			<mx:FormItem label="单位" labelWidth="120">
+				<skins:BindTextInput dataField="unit" data="{theMaterial}" text="{theMaterial.unit}" width="170"/>
+			</mx:FormItem>
+			<mx:FormItem label="规格" labelWidth="120">
+				<skins:BindTextInput dataField="spec" data="{theMaterial}" text="{theMaterial.spec}" width="170" />
+			</mx:FormItem>
+			<mx:FormItem label="损耗" labelWidth="120">
+				<skins:BindTextInput dataField="loss" data="{theMaterial}" text="{theMaterial.loss}" width="170"/>
+			</mx:FormItem>
+			<mx:FormItem label="单价" labelWidth="120">
+				<skins:BindTextInput dataField="price" data="{theMaterial}" text="{theMaterial.price}" width="170" restrict="0-9."/>
+			</mx:FormItem>
+			<mx:Spacer height="80"/>
+			<mx:Button label="保存" click="saveMtl(event)"/>
+		</mx:VBox>
+		
+	</s:TitleWindow>
+</mx:Module>

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="进货明细" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" close="PopUpEffect.Hide(this);"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="400" height="300"
+		 horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" >
+	<fx:Declarations>
+		<mx:RadioButtonGroup id="isPay" selectedValue="{item==null?1:item.isPay}" change="item.isPay=int(isPay.selectedValue);"/>
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			
+			import entity.InfoMsg;
+			
+			import module.PurchaseModule;
+			
+			import mx.binding.utils.ChangeWatcher;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			
+			import skins.PopUpEffect;
+			[Bindable]
+			public var item:InfoMsg;
+			public var dbStatement:SQLStatement;
+			protected function save():void
+			{
+				if(item.id==0){
+					addItemSQL();
+				}else{
+					update();
+				}
+			}
+			private function update():void
+			{
+				dbStatement.text = "update InfoMsg set bz='"+item.bz+"',kg='"+item.kg+"',unit='"+item.unit+"',money='"+item.money+
+					"',isPay='"+item.isPay+"',infoTime='"+DateFormatHelper.Format1(jh.selectedDate)+"' where id="+item.id;
+				dbStatement.execute();
+				dispatchEvent(new Event(PurchaseModule.REFRESH));
+				PopUpEffect.Hide(this);
+			}
+			private function addItemSQL():void
+			{
+				dbStatement.text = "INSERT into InfoMsg(bz,kg,unit,money, isPay, infoTime)"+
+					"values('"+item.bz+"','"+item.kg+"','"+item.unit+"','"+item.money+"','"+item.isPay+"','"+DateFormatHelper.Format1(jh.selectedDate)+"')" ;
+				dbStatement.execute();
+				dispatchEvent(new Event(PurchaseModule.REFRESH));
+				PopUpEffect.Hide(this);
+			}
+			
+			
+			private function errorHandler(error:SQLError):void
+			{
+				trace("Error Occurred with id: " + error.errorID  + " operation " + error.operation + " message " + error.message);
+			}
+			private function createError(event:SQLErrorEvent):void
+			{
+				trace("Error Occurred with id: " + event.error.errorID  + " message " + event.error.message);
+			}
+			
+			
+			protected function calc():void
+			{
+				// TODO Auto-generated method stub
+				item.money = Number((item.kg*item.unit).toFixed(2));
+			}
+			
+		]]>
+	</fx:Script>
+	<mx:VBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+		
+		<mx:FormItem label="进货明细" indicatorGap="2" labelWidth="80">
+			<skins:BindTextInput data="{item}" dataField="bz" width="300" text="{item.bz}" />
+		</mx:FormItem>
+		<mx:FormItem label="数量" indicatorGap="2" labelWidth="80">
+			<skins:BindTextInput data="{item}" dataField="kg" width="300" text="{item.kg}"  restrict="0-9." change="calc()"/>
+		</mx:FormItem>
+		<mx:FormItem label="单价" indicatorGap="2" labelWidth="80">
+			<skins:BindTextInput data="{item}" dataField="unit" width="300" text="{item.unit}" restrict="0-9." change="calc()"/>
+		</mx:FormItem>
+		<mx:FormItem label="金额" indicatorGap="2" labelWidth="80">
+			<skins:BindTextInput data="{item}" dataField="money" width="300" text="{item.money}"  restrict="0-9."/>
+		</mx:FormItem>
+		<mx:FormItem label="进货时间" indicatorGap="2" labelWidth="80">
+			<mx:DateField  id="jh" selectedDate="{new Date()}" width="300" formatString="YYYY-MM-DD"/>
+		</mx:FormItem>
+		<mx:HBox width="100%" horizontalAlign="center" horizontalGap="2">
+			<mx:RadioButton groupName="isPay" label="未付款" value="1" width="85"/>
+			<mx:RadioButton groupName="isPay" label="已付款" value="2" width="85"/>
+		</mx:HBox>
+		<mx:ControlBar>
+			<mx:Button label="保存" click="save()" buttonMode="true"/>
+		</mx:ControlBar>
+	</mx:VBox>
+</s:TitleWindow>

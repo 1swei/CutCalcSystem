@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="onComplete(event)"
+		   xmlns:mx="library://ns.adobe.com/flex/mx" layout="absolute" width="100%" height="100%" xmlns:autoComplete="flex.ui.spark.autoComplete.*" xmlns:ns="http://code.google.com/p/flexlib/">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+		<s:Rotate id="effectRefresh" target="{refreshBtn}" angleBy="90"
+				  applyChangesPostLayout="true" autoCenterTransform="true" />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import TitleWindows.SellDoc;
+			
+			import common.ChineseConvert;
+			import common.DataCmdEvent;
+			import common.DataFormat;
+			import common.DateFormatHelper;
+			
+			import entity.AccountStat;
+			import entity.Customer;
+			import entity.Sell;
+			import entity.SellDetail;
+			import entity.enum.DataState;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.managers.PopUpManager;
+			
+			import skins.PopUpEffect;
+			
+			[Bindable]
+			public var customerArray:ArrayCollection;
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			[Bindable]
+			public var totalAmount:Number=0;//总金额
+			
+			private function selectCust():void{
+				customerArray=Customer.getCustomers();
+			}
+			private function select():void{
+				var obj:Object = new Object();
+				obj.customer=customer.text;
+				obj.beginDate = beginDate.selectedDate;
+				obj.endDate = endDate.selectedDate;
+				obj.context = context.text;
+				obj[DataState.SAVED]=saveCheck.selected;
+				obj[DataState.FINISHED]=finishCheck.selected;
+				obj[DataState.DELETED]=deleteCheck.selected;
+				
+				dataArray=Sell.findByParam(obj);
+				calcTotal();
+			}
+			private function calcTotal():void{
+				totalAmount=0;
+				if(dataArray!=null&&dataArray.length>0){
+					for each(var item:Sell in dataArray){
+						totalAmount += item.amount;
+					}
+				}
+				totalAmount=Number(totalAmount.toFixed());
+			}
+			protected function onComplete(event:FlexEvent):void
+			{
+				select();
+				selectCust();
+			}
+			public function popDocWin(sell:Sell):void{
+				var panel:SellDoc=new SellDoc();
+				panel.setData(sell);
+				panel.addEventListener("REFRESH_SELL_MODULE",function(e:Event):void{
+					select();
+				});
+				PopUpEffect.Show(panel,this,false);
+			}
+			
+			public function searchFunction(obj:Object):Boolean{
+				var str:String = "";
+				if(obj.hasOwnProperty("name")&&obj["name"]!=null){
+					str = (obj["name"] as String).toLowerCase();
+				}
+				if(str.search(customer.text.toLowerCase())>=0){
+					return true;
+				}else if(ChineseConvert.isChinese(str)
+					&&ChineseConvert.convertString(str).search(customer.text.toLowerCase())>=0){
+					return true;	
+				}else{
+					return false;
+				}	
+			}
+			public function deleteSell(sell:Sell):void{
+				Alert.show("作废后数据无法还原，是否继续？",sell.code==""?"提示":sell.code,Alert.YES|Alert.NO,null,function(e:CloseEvent):void{
+					if(e.detail==Alert.YES){
+						Sell.changeState(sell.id,DataState.DELETED);
+						select();
+					}
+				});
+			}
+			public function finishSell(sell:Sell):void{
+				Alert.show("是否确定完成，完成后单据将无法修改。",sell.code==""?"提示":sell.code,Alert.YES|Alert.NO,null,function(e:CloseEvent):void{
+					if(e.detail==Alert.YES){
+						Sell.changeState(sell.id,DataState.FINISHED);
+						select();
+						AccountStat.createBySell(sell);
+					}
+				});
+			}
+			
+			public function chechAll(select:Boolean):void{
+				for each(var item:Sell in dataArray){
+					item.check=select;
+				}
+			}
+			
+			public function finishAll():void{
+				var len:int=0;
+				var ids:Array=new Array();
+				for each(var item:Sell in dataArray){
+					if(item.check&&item.state!=DataState.DELETED){
+						len++;
+						ids.push(item.id);
+					}
+				}
+				if(ids.length>0){
+					Alert.show("是否完成"+ids.length+"条销售单？","提示",Alert.YES|Alert.NO,null,function (e:CloseEvent):void{
+						if(e.detail==Alert.YES){
+							Sell.changeStateAll(ids,DataState.FINISHED);
+							select();
+						}
+					});
+				}
+				
+			}
+		]]>
+	</fx:Script>
+	<mx:VBox width="100%" height="100%" verticalGap="2">
+		<mx:HBox verticalAlign="middle" horizontalGap="4">
+			<mx:Button label="新建" height="24" buttonMode="true" click="popDocWin(new Sell())" />
+			<mx:Button label="批量完成" height="24" buttonMode="true" click="finishAll()" />
+			<autoComplete:AutoComplete id="customer" labelField="name" width="130" dataProvider="{customerArray}"
+									   searchMode="sync" select="select()" prompt="客户"
+									   skinClass="flex.ui.spark.autoComplete.AutoCompleteSkin"
+									   searchFunction="searchFunction" 
+									   emptyString="- 无 -" textAlign="left" />
+			<mx:HBox horizontalGap="2">
+				<mx:CheckBox label="保存" id="saveCheck" change="select()" selected="true"/>
+				<mx:CheckBox label="完成" id="finishCheck" change="select()" selected="true"/>
+				<mx:CheckBox label="作废" id="deleteCheck" change="select()" selected="false"/>
+			</mx:HBox>
+			<s:Label text="创建时间"/>
+			<mx:DateField  id="beginDate" selectedDate="{DateFormatHelper.getDateBefore(2)}" 
+						   yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+						   selectableRange="{{ rangeEnd : endDate.selectedDate}}" change="select();" />
+			<s:Label text="至"/>
+			<mx:DateField id="endDate" selectedDate="{new Date()}"
+						  yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+						  selectableRange="{{rangeStart : beginDate.selectedDate}}" change="select();"/>
+
+			<ns:PromptingTextInput id="context" prompt="综合搜索(回车)" enter="select()" width="130"/>
+			<mx:Image id="refreshBtn" buttonMode="true" source="@Embed('/img/refresh.png')" click="select()" toolTip="刷新"
+					  mouseOver="effectRefresh.play()" mouseOut="effectRefresh.play()"/>
+			<mx:HBox verticalAlign="middle">
+				<mx:Label text="总金额：{totalAmount}" />
+			</mx:HBox>
+		</mx:HBox>
+		<s:Group width="100%" height="100%">
+			<mx:DataGrid id="dataGrid" width="100%" height="100%" dataProvider="{dataArray}" doubleClickEnabled="true" sortableColumns="false" 
+						 itemDoubleClick="popDocWin(Sell.getSell(dataGrid.selectedItem.id as int))">
+				<mx:columns>
+					<mx:DataGridColumn width="65">
+						<mx:headerRenderer>
+							<fx:Component>
+								<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle">
+									<mx:Label text="全选"/>
+									<mx:CheckBox id="check" change="outerDocument.chechAll(check.selected)" buttonMode="true" toolTip="全选"/>
+								</mx:HBox>
+							</fx:Component>
+						</mx:headerRenderer>
+						<mx:itemRenderer> 
+							<fx:Component>
+								<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle" >
+									<fx:Script>
+										<![CDATA[
+											import entity.SellDetail;
+										]]>
+									</fx:Script>
+									<mx:Label text="{data.rowid}"/>
+									<mx:CheckBox id="check" selected="{data.check}" change="data.check=check.selected;" buttonMode="true"/>
+								</mx:HBox>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="销售单号" dataField="code" width="90"/>
+					<mx:DataGridColumn headerText="客户名称" dataField="custName" width="200"/>
+					<mx:DataGridColumn headerText="创建时间" dataField="createTime" width="145"/>
+					<mx:DataGridColumn headerText="总金额" dataField="amount" width="100" textAlign="right" />
+					<mx:DataGridColumn headerText="备注" dataField="memo"/>
+					<mx:DataGridColumn headerText="状态" dataField="state" ><!--labelFunction="DataState.DataStateLabelFun"-->
+						<mx:itemRenderer>
+							<fx:Component>
+								<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" dataChange="zty(data)">				
+									<mx:Image id="pic" width="16" height="16" />
+									<fx:Script>
+										<![CDATA[
+											import entity.Sell;
+											import entity.enum.DataState;
+											import mx.core.FlexGlobals;
+											private function zty(u:Object):void{
+												var data:Sell=u as Sell;
+												if(data!=null){
+													if(data.state==DataState.FINISHED){
+														pic.source = FlexGlobals.topLevelApplication.FINISH_IMG;
+														pic.toolTip = "已完成";
+													}else if(data.state==DataState.SAVED){
+														pic.source = FlexGlobals.topLevelApplication.NOPAY_IMG;
+														pic.toolTip = "未完成";
+													}else{
+														pic.source = FlexGlobals.topLevelApplication.DELETE_IMG;
+														pic.toolTip = "已作废";
+													}
+												}
+											}
+										]]>
+									</fx:Script>
+								</mx:HBox>
+							</fx:Component>
+						</mx:itemRenderer>	
+					</mx:DataGridColumn>
+					<mx:DataGridColumn headerText="操作">
+						<mx:itemRenderer>
+							<fx:Component>
+								<mx:HBox horizontalAlign="center">
+									<fx:Script>
+										<![CDATA[
+											import entity.Sell;
+											import entity.enum.DataState;
+										]]>
+									</fx:Script>
+									<mx:Button label="打开" click="outerDocument.popDocWin(Sell.getSell(data.id as int))" width="55"/>
+									<mx:Button label="完成" click="outerDocument.finishSell(data as Sell)" width="55" enabled="{data.state==DataState.SAVED}"/>
+									<mx:Button label="作废" click="outerDocument.deleteSell(data as Sell)" width="55" enabled="{data.state==DataState.SAVED}"/>
+								</mx:HBox>
+							</fx:Component>
+						</mx:itemRenderer>
+					</mx:DataGridColumn>
+				</mx:columns>
+			</mx:DataGrid>
+		</s:Group>
+	</mx:VBox>
+</mx:Module>

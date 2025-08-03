@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Module xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="init();"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" xmlns:my="skins.my.*" >
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			import common.MecExporterHelper;
+			
+			import entity.AluPro;
+			import entity.Colors;
+			import entity.Customer;
+			import entity.Orders;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			
+			[Bindable]
+			public var edit:Boolean=true;//是否能编辑
+			
+			private var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			[Bindable]public var colorArray:ArrayCollection;
+			[Bindable]public var ylTypeArray:ArrayCollection;
+			[Bindable]public var khArray:ArrayCollection;
+			
+			protected function init():void {
+				this.colorArray=Colors.getColors();
+				this.ylTypeArray=AluPro.getAluPros();
+				this.khArray = Customer.getCustomers();
+			}
+
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			public function getData():void {
+				var result:ArrayCollection = Orders.orderDetailReport(beginDate.selectedDate,endDate.selectedDate,khName.textInput.text,color.selectedLabel,ylType.selectedLabel);
+				if(result!=null && result.length>0){
+					var pfSum:Number=0;
+					for(var i:int =0;i<result.length;i++){
+						var item:Object = result.getItemAt(i);
+						pfSum += item.pf as Number;
+					}
+					var totalItem:Object = new Object();
+					totalItem.khName = "-合计-";
+					totalItem.pf = Number(pfSum.toFixed(2));
+					result.addItem(totalItem);
+				}
+				this.dataArray = result ; 
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox verticalGap="2" width="100%" height="100%">
+		<mx:HBox width="100%" paddingBottom="2" verticalAlign="middle" horizontalGap="4" >
+			<mx:FormItem label="客户名称" labelWidth="80" indicatorGap="0">
+				<mx:HBox horizontalGap="4" width="150">
+					<my:ComboBoxFilter id="khName" labelField="name" dataSource="{khArray}" width="150" focusIn="IME.enabled=true" textAlign="left"  />
+				</mx:HBox>
+			</mx:FormItem>
+			<mx:ComboBox id="ylType" width="100" dataProvider="{ylTypeArray}" labelField="name" prompt="型材"  />
+			
+			<mx:ComboBox id="color" width="80" dataProvider="{colorArray}" labelField="color" prompt="颜色"  />
+			
+			<mx:DateField  id="beginDate" formatString="YYYY-MM-DD" selectedDate="{DateFormatHelper.getDateBefore(2)}" 
+						   selectableRange="{{ rangeEnd : endDate.selectedDate}}" toolTip="下单时间"/>
+			<s:Label text="至"/>
+			<mx:DateField id="endDate" formatString="YYYY-MM-DD" selectedDate="{new Date()}"
+						  selectableRange="{{rangeStart : beginDate.selectedDate}}" toolTip="下单时间"/>
+			<mx:Button label="查询" height="24" click="getData()" buttonMode="true"/>
+		</mx:HBox>
+		<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" >
+			<mx:columns>
+				<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40" editable="false"/>
+				<mx:DataGridColumn dataField="khName" headerText="客户名称" textAlign="left" width="100" sortable="true"/>
+				<mx:DataGridColumn dataField="xdTime" headerText="下单时间" textAlign="left" width="300" sortable="true"/>
+				<mx:DataGridColumn dataField="color" headerText="型材颜色" textAlign="left" width="120" sortable="true"/>
+				
+				<mx:DataGridColumn dataField="yl" headerText="型材" textAlign="left" width="120" sortable="true"/>
+				<mx:DataGridColumn dataField="pf" headerText="平方㎡" textAlign="left" width="120" sortable="true"/>
+			</mx:columns>
+		</mx:DataGrid>
+	</mx:VBox>
+</mx:Module>

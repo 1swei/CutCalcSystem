@@ -1,0 +1,462 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Group xmlns:fx="http://ns.adobe.com/mxml/2009"
+		 xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="init()"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" width="830" height="522">
+	<fx:Declarations>
+		<mx:DateFormatter id="df" formatString="YYYY-MM-DD JJ-NN-SS"/>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import TitleWindows.CustomFormulaDoc;
+			
+			import common.DataCmdEvent;
+			import common.FileUtil;
+			
+			import draw.bezierLine.BezierLine;
+			
+			import entity.CustomFormula;
+			
+			import flash.filters.GlowFilter;
+			import flash.net.dns.AAAARecord;
+			
+			import mx.binding.utils.BindingUtils;
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.FileSystemList;
+			import mx.controls.FileSystemTree;
+			import mx.controls.TextArea;
+			import mx.controls.TextInput;
+			import mx.core.Application;
+			import mx.core.FlexGlobals;
+			import mx.core.UIComponent;
+			import mx.core.mx_internal;
+			import mx.events.CollectionEvent;
+			import mx.events.FlexEvent;
+			import mx.graphics.ImageSnapshot;
+			import mx.graphics.codec.JPEGEncoder;
+			import mx.managers.PopUpManager;
+			import mx.utils.ColorUtil;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			import spark.components.Image;
+			
+			
+			
+			[Bindable] 
+			public var _lineSize:int=4;
+			[Bindable] 
+			public var _lineColor:uint=0x000000;
+			private var _changeLineFlag:Boolean = false;
+			private var _changeFillFlag:Boolean = false;
+			public var spriteFlag:String="直线";
+			public var drawMove:Boolean=true;//本次移动是否绘图(拖动曲线使用)
+			public var indexList:ArrayCollection=new ArrayCollection();//myPanel显示对象
+			public var tempDel:ArrayCollection=new ArrayCollection();//临时删除对象
+			
+			
+			private var oY:Number;
+			private var nX:Number;
+			private var oX:Number;
+			private var nY:Number;
+			private var _isDown:Boolean=false;
+			private var showBasePanelFlag:Boolean=false;
+			private var _file:File;
+			private var sprit:Sprite=new Sprite();
+			private var comUI:UIComponent=new UIComponent();
+			private var PrObj:Object=new Object();
+			private var _imgByteArray:ByteArray;
+			private var glowFilter:GlowFilter;
+			private var currLine:BezierLine;
+			private var picName:String="请输入图片名.jpg";
+			private function init():void
+			{
+				// 选中线条的发光滤镜
+				glowFilter = new GlowFilter();
+				
+				//全屏
+				/* systemManager.stage.addEventListener(FullScreenEvent.FULL_SCREEN,fullScreenHand);
+				systemManager.stage.displayState = StageDisplayState.FULL_SCREEN_INTERACTIVE; */
+				initConsolePanel();
+				//清除画板
+				myPanel.removeAllChildren();
+				myPanel.visible=true;
+				//0x869ca7设置画笔颜色。
+				myPanel.graphics.lineStyle(0,0x000000,0);
+				//绘制一个透明度为0.1的画板。
+				myPanel.graphics.beginFill(0xFFFFFF,1);
+				myPanel.graphics.drawRect(0,0,myPanel.width,myPanel.height);
+				myPanel.graphics.endFill();
+				//添加鼠标事件监听，即画笔动作的处理。
+				myPanel.addEventListener(MouseEvent.MOUSE_DOWN,downHandler);
+				myPanel.addEventListener(MouseEvent.MOUSE_MOVE,moveHandler);
+				myPanel.addEventListener(MouseEvent.MOUSE_UP,upHandler);
+			}
+			//把鼠标移上去显示界面改成直接显示
+			private function initConsolePanel():void{
+				BindingUtils.bindProperty(this,"_lineSize",hs,"value");
+				indexList.addEventListener(CollectionEvent.COLLECTION_CHANGE,listChange);
+				tempDel.addEventListener(CollectionEvent.COLLECTION_CHANGE,tempDelChange);
+				
+				//设置面板中保存清除，撤消，恢复等操作所涉及对象的集合。
+				if(indexList.length!=0)
+				{
+					indexList.removeAll();
+				}
+				if(tempDel.length!=0)
+				{
+					tempDel.removeAll();
+				}	
+			}
+			/* private function fullScreenHand(evt:FullScreenEvent):void{
+				if(evt.fullScreen)
+				{}
+				else
+				{//一旦退出全屏即退出系统。
+					this.parentDocument.close();
+				}
+			} */
+			//---------保存:同时向远程和本地保存----------------
+			protected function prScrn_clickHandler(event:MouseEvent):void
+			{
+				var encode:JPEGEncoder=new JPEGEncoder(100);
+				var m : Matrix = new Matrix();
+				//ImageSnapshot类抓取myPanel面板的BitmapData
+				var bmp:BitmapData = ImageSnapshot.captureBitmapData(myPanel,m,null,null,null,true);
+				bmp.draw(myPanel,m);
+				//解析为ByteArray
+				_imgByteArray=encode.encode(bmp);
+				
+				_file =new File(FileUtil.winRemotePath +  picName);
+				_file.browseForSave("请选择图片的保存位置");
+				//单击保存按钮派发事件。
+				_file.addEventListener(Event.SELECT,getSavePathHandler);
+				//单击取消按钮将判断条件回置为初始状态。
+				_file.addEventListener(Event.CANCEL,function():void{_file = null;return;});
+			}
+			//点击保存按钮，触发select事件时的处理函数。
+			private function getSavePathHandler(event:Event):void
+			{
+				/*_file = event.target as File;
+				//得到选择的路径，将其转换为数组处理。
+				var pathDirectoryArr:Array = _file.nativePath.toString().split("\\");
+				//去掉文件名。
+				pathDirectoryArr.pop();
+				//将保存目录的路径保存到saveDirectoryPath变量中。
+				saveDirectoryPath= pathDirectoryArr.join("\\"); */
+				writeDataToImage();
+			}
+			//使用文件流生成截图。
+			private function writeDataToImage():void
+			{
+				var filestream:FileStream=new FileStream();
+				try{
+					this.picName=_file.name;
+					filestream.open(_file,FileMode.WRITE);
+					filestream.writeBytes(_imgByteArray);
+					filestream.close();	
+					//本图片从远程拷贝到本地
+					var toLocal:File = new File(FileUtil.winTmpPath+_file.name);
+					FileUtil.copyDirFile(_file,toLocal);
+				}catch(e:Error){
+					Alert.show(e.message);
+				}
+			}
+			//撤销按钮操作。
+			protected function btn_cancel_clickHandler():void
+			{   
+				if(indexList.length != 0 && indexList.length >= 0)
+				{
+					tempDel.addItem(indexList.getItemAt(indexList.length-1));
+					myPanel.removeChild(indexList.getItemAt(indexList.length - 1) as DisplayObject);
+					indexList.removeItemAt(indexList.length-1);
+				}
+			}
+			
+			//-----清空白板按钮操作--------
+			protected function btn_reset_clickHandler(event:MouseEvent):void
+			{
+				myPanel.removeAllChildren();
+				indexList.removeAll();
+				tempDel.removeAll();
+			}
+			
+			//------图形恢复按钮操作-------
+			protected function btn_recovery_clickHandler(event:MouseEvent):void
+			{
+				
+				if(tempDel.length!=0)
+				{
+					indexList.addItem(tempDel.getItemAt(tempDel.length-1))
+					myPanel.addChild(tempDel.getItemAt(tempDel.length-1) as DisplayObject);
+					tempDel.removeItemAt(tempDel.length-1);	  
+				}
+			}
+			//绘图时，鼠标按下操作处理。
+			private function downHandler(e:MouseEvent):void
+			{
+				_isDown=true;
+				oX = myPanel.mouseX;
+				oY = myPanel.mouseY;
+				sprit=new Sprite();
+				if(spriteFlag=="文字"){
+					var textIn:TextArea = new TextArea();
+					textIn.height=50;
+					textIn.width=200;
+					textIn.x = oX;
+					textIn.y = oY;
+					textIn.styleName="leftText";
+					textIn.horizontalScrollPolicy="off";
+					textIn.verticalScrollPolicy="off";
+					textIn.addEventListener(FocusEvent.MOUSE_FOCUS_CHANGE, function textInputMouseFocusChange(event:FocusEvent):void{
+						　if(stage && stage.focus)
+						　　{
+								stage.focus=null;
+								textIn.setStyle("borderStyle","none");
+								textIn.setStyle("contentBackgroundAlpha",0);
+							
+						　　}});
+					myPanel.addChild(textIn);
+					spriteFlag="";
+				}
+				if(e.target as BezierLine){
+					drawMove=false;
+				}
+				selectLine(e.target as BezierLine);
+			}
+			// 选中一条线
+			private function selectLine(line:BezierLine):void
+			{
+				if (currLine) currLine.filters = null;
+				
+				currLine = line;
+				if (line) line.filters = [glowFilter];
+			}
+			
+			//---------绘图时，鼠标释放操作处理。----------
+			private function upHandler(e:MouseEvent):void
+			{
+				_isDown=false;
+				
+				if(spriteFlag=="曲线"&&drawMove){
+					sprit.graphics.clear();
+					var line:BezierLine = new BezierLine(oX, oY, myPanel.mouseX, myPanel.mouseY);
+					line.setStyle(_lineSize,_lineColor,1);
+					var uiCom:UIComponent = new UIComponent();
+					uiCom.addChild(line);
+					myPanel.addChild(uiCom);
+					selectLine(line);
+				}
+				
+				var Num:Number=Number(myPanel.numChildren)-1;
+				if(Num>=0)
+				{
+					indexList.addItem(myPanel.getChildAt(myPanel.numChildren-1));
+				}
+				
+				drawMove=true;
+				oX=myPanel.mouseX;
+				oY=myPanel.mouseY;
+				
+			}
+			//-----鼠标移动事件-----------
+			private function moveHandler(e:MouseEvent):void
+			{
+				if(_isDown&&drawMove)
+				{
+					myPanel.graphics.lineStyle(_lineSize,_lineColor,1);
+					
+					//-----生成画笔-----------
+					if(spriteFlag=="画笔"){
+						
+						sprit.graphics.lineStyle(_lineSize,_lineColor,1);//应用线条样式
+						sprit.graphics.beginFill(0xffffff,1);//图的内部填充
+						var x:Number = myPanel.mouseX;
+						var y:Number = myPanel.mouseY;
+						sprit.graphics.moveTo(oX,oY);
+						sprit.graphics.lineTo(x,y);
+						var uiCom:UIComponent=new UIComponent();
+						uiCom.addChild(sprit);
+						myPanel.addChild(uiCom);
+						oX=x;
+						oY=y;
+					}
+					if(spriteFlag=="橡皮"){
+						
+						sprit.graphics.lineStyle(_lineSize+8,0xffffff,1);//应用线条样式
+						sprit.graphics.beginFill(0xffffff,1);//图的内部填充
+						var x:Number = myPanel.mouseX;
+						var y:Number = myPanel.mouseY;
+						sprit.graphics.moveTo(oX,oY);
+						sprit.graphics.lineTo(x,y);
+						var uiCom:UIComponent=new UIComponent();
+						uiCom.addChild(sprit);
+						myPanel.addChild(uiCom);
+						oX=x;
+						oY=y;
+					}
+					if(spriteFlag=="直线"||spriteFlag=="曲线"){
+						
+						sprit.graphics.clear();
+						sprit.graphics.lineStyle(_lineSize,_lineColor,1);
+						sprit.graphics.moveTo(oX,oY);
+						sprit.graphics.lineTo(myPanel.mouseX,myPanel.mouseY);
+						var uiCom:UIComponent = new UIComponent();
+						uiCom.addChild(sprit);
+						myPanel.addChild(uiCom);
+					}
+					//---生成圆--------					
+					if(spriteFlag=="椭圆"){
+						
+						sprit.graphics.clear();
+						sprit.graphics.lineStyle(_lineSize,_lineColor,1);
+						
+						nX = myPanel.mouseX;
+						nY = myPanel.mouseY;
+						
+						var cX:Number=oX+(nX-oX)/2;
+						var cY:Number=oY+(nY-oY)/2;
+						var preX:Number  =Math.min(oX,nX);
+						var preY:Number  =Math.min(oY,nY);
+						var cWidth:Number = Math.abs(oX - nX);
+						var cHeight:Number  = Math.abs(oY- nY);
+						sprit.graphics.drawEllipse(preX,preY,cWidth,cHeight);
+						var uiCom:UIComponent = new UIComponent();
+						uiCom.addChild(sprit);
+						myPanel.addChild(uiCom);
+					}
+					//----------生成矩形-------------
+					if(spriteFlag=="矩形"){
+						sprit.graphics.clear();
+						
+						sprit.graphics.lineStyle(_lineSize,_lineColor,1);
+						nX=myPanel.mouseX;
+						nY=myPanel.mouseY;
+						sprit.graphics.drawRect(oX,oY,nX-oX,nY-oY);
+						var uiCom:UIComponent = new UIComponent();
+						uiCom.addChild(sprit);
+						myPanel.addChild(uiCom);
+					}
+					//----------生成截屏区域-------------
+					if(spriteFlag=="截屏"){
+						//sprit=new Sprite();
+						
+						sprit.graphics.clear();
+						sprit.graphics.lineStyle(_lineSize,_lineColor,1);
+						nX=myPanel.mouseX;
+						nY=myPanel.mouseY;
+						sprit.graphics.drawRect(oX,oY,nX-oX,nY-oY);
+						comUI.addChild(sprit);
+						comUI.width=sprit.width;
+						comUI.height=sprit.height;
+						myPanel.addChild(comUI);
+					}
+					
+				}
+			}
+			
+			private function listChange(evt:CollectionEvent):void
+			{
+				if(indexList.length==0)
+				{
+					btn_cancel.enabled=false;
+					btn_reset.enabled=false;
+					prScrn.enabled=false;
+				}
+				else
+				{
+					btn_cancel.enabled=true;
+					btn_reset.enabled=true;
+					prScrn.enabled=true;
+				}
+			}
+			private function tempDelChange(evt:CollectionEvent):void
+			{
+				if(tempDel.length==0)
+				{
+					btn_recovery.enabled=false;
+				}
+				else
+				{
+					btn_recovery.enabled=true;
+				}
+			}
+			private function startDrag1():void{
+				this.startDrag();
+			}
+			private function stopDrag1():void{		
+				this.stopDrag();			    	
+			}
+			/**加载图片,不管什么尺寸,保证图片能在画布中完整显示*/
+			public function loadPic(_picName:String):void{
+				this.picName=_picName;
+				var imgPanel:Image = new Image();
+				imgPanel.source=FileUtil.winTmpPath+picName;
+				imgPanel.width=FileUtil.width_pic;
+				imgPanel.height=FileUtil.height_pic;
+				myPanel.addChild(imgPanel);
+			}
+			
+			private function close():void{
+				dispatchEvent(new DataCmdEvent(CustomFormulaDoc.LOADDRAWPIC,picName));
+				PopUpEffect.Hide(this);
+			}
+			/**这样加载没问题,但是之前有些图片大小不一样.为了保证图在mypanel中间,就不这么操作了*/
+			private var loader:Loader = new Loader();
+			public function loadPic2(_picName:String):void{
+				this.picName=_picName;
+				var request:URLRequest = new URLRequest(FileUtil.winTmpPath+picName);
+				
+				loader.load(request);
+				loader.contentLoaderInfo.addEventListener(Event.COMPLETE, drawImage);
+				loader.contentLoaderInfo.addEventListener(IOErrorEvent.IO_ERROR, ioErrorHandler);
+			}
+			
+			private function drawImage(event:Event):void {
+				
+				var mySprite:Sprite = new Sprite();
+				var myBitmap:BitmapData = new BitmapData(loader.width, loader.height, false);
+				var m:Matrix=new Matrix();
+				myBitmap.draw(loader, m);
+				
+				myPanel.graphics.beginBitmapFill(myBitmap, m, false);
+				myPanel.graphics.drawRect(0,0,myPanel.width,myPanel.height);
+				myPanel.graphics.endFill();
+				
+				//var uiCom:UIComponent = new UIComponent();
+				//uiCom.addChild(mySprite);
+				//myPanel.addChild(uiCom);
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void {
+				trace("Unable to load image url" );
+			}
+		]]>
+	</fx:Script>
+	<mx:HBox verticalAlign="middle" horizontalAlign="center" width="100%" height="100%" horizontalGap="-1"
+			 borderVisible="true" borderStyle="solid">
+		<mx:VBox id="chooseBox" width="85" height="100%" horizontalAlign="center" verticalAlign="top" paddingTop="10" paddingBottom="10" 
+				verticalGap="4" backgroundColor="#e5e5e5"> <!--mouseDown="startDrag1()" mouseUp="stopDrag1()" -->
+			
+			<mx:Button label="直线" id="zline" click="this.spriteFlag='直线';" styleName="lineBtn" buttonMode="true"/>
+			<mx:Button label="曲线" id="qline" click="this.spriteFlag='曲线';" styleName="curveBtn" buttonMode="true"/>
+			<mx:Button label="画笔" id="line"  click="this.spriteFlag='画笔';" styleName="penBtn" buttonMode="true"/>
+			<mx:Button label="矩形" id="rect"  click="this.spriteFlag='矩形'" styleName="rectBtn" buttonMode="true"/>
+			<mx:Button label="椭圆" id="circle" click="this.spriteFlag='椭圆';" styleName="ellipseBtn" buttonMode="true"/>
+			<mx:Button label="文字" id="word" click="this.spriteFlag='文字';" styleName="aBtn" buttonMode="true"/>
+			<mx:Button label="橡皮" id="xp" click="this.spriteFlag='橡皮';" styleName="rullerBtn" buttonMode="true"/>
+			<mx:Button label="撤消" id="btn_cancel"  enabled="false" click="btn_cancel_clickHandler()" styleName="returnBtn" buttonMode="true"/>
+			<mx:Button label="恢复" id="btn_recovery"  enabled="false" click="btn_recovery_clickHandler(event)" styleName="gotoBtn" buttonMode="true"/>
+			<mx:Button label="清除" id="btn_reset"  enabled="false" click="btn_reset_clickHandler(event)" styleName="delBtn" buttonMode="true"/>
+			<mx:Button label="保存" id="prScrn" enabled="false" click="prScrn_clickHandler(event)" styleName="saveBtn" buttonMode="true"/><!--labelPlacement="bottom" -->
+			<mx:Button label="关闭" click="close()" styleName="closeBtn" buttonMode="true"/>
+			<mx:VSlider id="hs" value="{_lineSize}" minimum="1" maximum="10" snapInterval="1" tickInterval="1" liveDragging="true" toolTip="笔刷大小" buttonMode="true"/>
+				
+		</mx:VBox>
+		<mx:Canvas width="{FileUtil.width_pic}" height="{FileUtil.height_pic}" id="myPanel" fontSize="12" borderVisible="false" focusEnabled="true" verticalScrollPolicy="off" horizontalScrollPolicy="off">
+		</mx:Canvas>
+		
+	</mx:HBox>
+</s:Group>

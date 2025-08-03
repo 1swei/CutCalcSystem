@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" verticalCenter="0" horizontalCenter="0" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="600" height="510" title="版本注册" close="this.parentDocument.close();">
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			import common.MyEncrypt;
+			
+			import entity.Regs;
+			
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			
+			import skins.PopUpEffect;
+			private var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			protected function regSys():void
+			{
+				if(!checkTextIn()){
+					return;
+				}
+				Regs.delRegs();//先删除
+				Regs.insertRegs(textReg.text);
+				Alert.show("注册成功！","提示");
+				PopUpEffect.Hide(this);
+			}
+			private function checkTextIn():Boolean{
+				if(textReg.text==null||textReg.text.length==0){
+					Alert.show("请输入注册码！","提示");
+					return false;
+				}
+				if(MyEncrypt.encode0to3(MyEncrypt.getNativeEncrypt())!=textReg.text){
+					Alert.show("注册码错误！","提示");
+					return false;
+				}
+				return true;
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" paddingLeft="10" paddingRight="10" >
+		<mx:HBox width="100%" verticalAlign="top" horizontalAlign="left">
+			<mx:Image source="img/App64.png" />
+			<mx:VBox width="100%" height="100%" verticalGap="11">
+				<mx:Label text="玉乾下料系统" fontSize="21" fontWeight="bold"/>
+				<mx:Label text="任何公司单位或个人未经允许  不得将本软件移出贵公司范围以外地方使用" fontSize="15"/>
+				<mx:Label text="最终解释权归宁波玉乾建材有限公司所有" fontSize="15"/>
+				<mx:Label text="联系人：章先生  联系电话：15867490517  联系QQ：465993407" fontSize="15"/>
+			</mx:VBox>
+		</mx:HBox>
+		<mx:Spacer height="9"/>
+		<mx:Spacer height="9"/>
+		<mx:VBox width="100%">
+			<mx:VBox width="100%">
+				<mx:Label text="本机码："/>
+				<mx:TextArea width="100%" height="100" id="textLoc" text="{MyEncrypt.encode0to1()}" editable="false" textAlign="left"/>
+			</mx:VBox>
+			<mx:VBox width="100%">
+				<mx:Label text="注册码："/>
+				<mx:TextArea width="100%" height="100" id="textReg" textAlign="left"/>
+			</mx:VBox>
+		</mx:VBox>
+		<mx:HBox width="100%" horizontalAlign="center" height="30" verticalAlign="bottom" >
+			<s:Button label="注册" click="regSys()" buttonMode="true"/>
+			<s:Button label="关闭" click="this.parentDocument.close();" buttonMode="true"/>
+		</mx:HBox>
+	</mx:VBox>
+</s:TitleWindow>

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:ComboBox  xmlns:mx="http://www.adobe.com/2006/mxml" creationComplete="initComponent()">
+	<mx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent; 
+			[Bindable] 
+			private var _label:String; 
+			[Bindable] 
+			public var treeSelectedItem:Object;
+			public function initComponent():void
+			{
+				addEventListener(MouseEvent.CLICK,change);
+			}
+			public function change(e:MouseEvent):void{
+				if(treeSelectedItem){
+					text=treeSelectedItem[labelField];
+				}
+			}
+			public function updateLabel(event:*):void{  
+				_label = event.currentTarget.selectedItem[this.labelField];     
+				treeSelectedItem = event.currentTarget.selectedItem; 
+			} 
+			
+			override protected function updateDisplayList(unscaledWidth:Number,
+														  unscaledHeight:Number):void
+			{
+				super.updateDisplayList(unscaledWidth, unscaledHeight);  
+				
+				if(dropdown && _label != null){   
+					text = _label; 
+				} 
+			}
+			public function selected(find:String,list:ArrayCollection):void{
+				/* if(find==null||list==null||list.length==0){
+					return;
+				}  */
+				for(var i:int=0;i<list.length;i++)  
+				{  
+					var child:Object=list.getItemAt(i);
+					var guid:String = child.id;
+					if(guid != null && guid == find)  
+					{  
+						
+						treeSelectedItem=child;
+						text=treeSelectedItem[labelField];
+						break;  
+					}else if(child.children!=null&&(child.children as ArrayCollection).length)//如果有子节点,则递归调用本方法  theTree.dataDescriptor.isBranch(child)
+					{  
+						selected(find,child.children as ArrayCollection);  
+					}  
+					
+				}  
+			}
+		]]>
+	</mx:Script>
+	<mx:dropdownFactory>
+		<mx:Component> 
+			<mx:Tree creationComplete="initTree(event)" change="outerDocument.updateLabel(event)" showRoot="true" height="255" selectedItem="{outerDocument.treeSelectedItem}">
+				<mx:Script>
+					<![CDATA[
+						import mx.events.FlexEvent;
+						public function initTree(event):void {
+							var len:int=super.dataProvider.length;
+							for(var i:int;i<len;i++)
+							{
+								super.expandChildrenOf(super.dataProvider[i], true);
+							}
+							super.selectedItem=outerDocument.treeSelectedItem;
+						}
+					]]>
+				</mx:Script>
+			</mx:Tree>
+			
+		</mx:Component>
+	</mx:dropdownFactory>
+</mx:ComboBox>

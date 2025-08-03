@@ -1,0 +1,274 @@
+﻿/* CSS file */
+@namespace s "library://ns.adobe.com/flex/spark";
+@namespace mx "library://ns.adobe.com/flex/mx";
+@namespace my "skins.my.";
+@namespace spark "mx.skins.spark.*";
+
+global {
+	font-family:'宋体';
+	font-size:14;
+	text-align:center;
+}
+@font-face {
+	embedAsCFF:false;
+	src:url("/css/fontawesome-webfont.ttf");
+	fontFamily: fontawesome; /* 嵌入后的字体名称 */
+	
+	fontStyle: normal;/* 常用值：normal, italic */
+	fontWeight: normal; /* 常用值：normal, bold */
+	advancedAntiAliasing: true;
+}
+.SuperTabButtonStyle{
+	tab-close-button-style-name: "SuperTabCloseButtonStyle";
+}
+
+.SuperTabCloseButtonStyle{
+	upSkin: Embed(source="/img/assets/assets.swf",symbol="firefox_close_up");
+	downSkin: Embed(source="/img/assets/assets.swf",symbol="firefox_close_down");
+	overSkin: Embed(source="/img/assets/assets.swf",symbol="firefox_close_over");
+	disabledSkin: Embed(source="/img/assets/assets.swf",symbol="firefox_close_disabled");
+	selectedUpSkin: Embed(source="/img/assets/assets.swf", symbol="firefox_close_up");
+	selectedDownSkin: Embed(source="/img/assets/assets.swf",symbol="firefox_close_down");
+	selectedOverSkin: Embed(source="/img/assets/assets.swf",symbol="firefox_close_over");
+	selectedDisabledSkin: Embed(source="/img/assets/assets.swf", symbol="firefox_close_disabled");
+}
+mx|ToolTip{
+	font-size:14;
+}
+mx|Tree{
+	folderClosedIcon: ClassReference(null);
+	folderOpenIcon: ClassReference(null);
+	defaultLeafIcon: ClassReference(null);
+	
+	disclosureClosedIcon:Embed(source="/img/ico/plus.gif");
+	disclosureOpenIcon:Embed(source="/img/ico/minus.gif");
+	
+}
+.newMenuFont 
+{  
+	fontFamily: fontawesome;
+/*	color:#ffffff;*/
+/*	fontSize:30;*/
+}
+.webFont{
+	fontFamily: fontawesome;
+}
+.menuFont{
+/*	color:#666666;
+	font-size:15;*/
+	text-align:center;
+}
+.menuBox{
+	verticalGap:2;
+/*	backgroundColor:#00adef;*/
+	buttonMode:true;
+	verticalAlign:middle;
+	horizontalAlign:center;
+	useHandCursor:true;
+	mouseChildren:false;
+}
+.head_title {
+	color:#ffffff;/**0098ff*/
+	font-size:28;
+	text-align:left;
+}
+.bkBorder{
+	borderStyle:solid;
+/**	borderColor:#87CEEB;	*/
+}
+mx|DataGrid {
+	verticalGridLines:false;
+}
+.myDataGrid{
+	header-background-skin:ClassReference("skins.my.PrintDataGridHeadSkin");
+	header-style-name:myDataGridHeaderSeparatorSkin;
+	color:#000000;
+	vertical-grid-lines:true;
+	vertical-grid-line-color:#000000;
+	horizontal-grid-lines:true;
+	horizontal-grid-line-color:#000000;
+	alternating-item-colors:#ffffff,#ffffff;
+	padding-top:0;
+	padding-bottom:0;
+	selection-color:#ffffff;
+	text-selected-color:#000000;
+	roll-over-color:#ffffff;
+	text-roll-over-color:#000000;
+	font-family:'宋体';
+	borderColor:#000000;
+}
+.myDataGridHeaderSeparatorSkin{
+	border-style:solid;
+	border-visible:true;
+	border-color:#000000;
+}
+mx|DateField{
+/*	focusColor:#EEEEEE;*/
+/*	borderColor:#2B6280;*/
+	textAlign:left;
+/*	color:#000000;*/
+	textInputStyleName:"dataField_input";
+	font-family:'宋体';
+}
+.dataField_input {
+/*	color:#000000;*/
+	font-family:'宋体';
+}
+mx|TextInput {
+/*	contentBackgroundColor:#FFFFFF;
+	focusColor:#EEEEEE;
+	borderColor:#87CEEB;*/
+	textAlign:left;
+/*	color:#000000;*/
+	font-family:'宋体';
+}
+mx|Button{
+/*	color:#174964;*/
+	font-family:'宋体';
+	buttonMode:true;
+	height:24;
+	
+}
+mx|VBox{
+/*	chromeColor:#CCCCCC;*/
+}
+mx|HBox{
+/*	chromeColor:#CCCCCC;*/
+}
+s|TitleWindow{
+/*	chromeColor:#66CEF5;
+	borderAlpha:0.75;*/
+}
+mx|ComboBox {
+/*	borderColor:#2B6280;
+	contentBackgroundAlpha:1;
+	contentBackgroundColor:#FFFFFF;
+	buttonMode:true;
+	color:#000000;
+	rollOverColor:#486287;
+	chromeColor:#D4D0C7;
+	symbolColor:#000000;
+	textAlign:left;*/
+}
+
+mx|Label{
+/*	color:#000000;*/
+}
+s|Label{
+}
+mx|RadioButton{
+/*	color:#000000;*/
+}
+mx|Alert { 
+/*	borderSkin:ClassReference("skins.MyPanelSkin");*/
+/*	color:#000000;*/
+/*	cornerRadius:5;
+	text-align:left;*/
+/*	font-family:'宋体';
+	yesLabel: '确定';
+	cancelLabel:'取消';
+	okLabel:'是';
+	noLabel:'否'; */
+}
+.smallText{
+	text-align:left;
+	font-size:12;
+	borderStyle:none;
+}
+.smallText10{
+	text-align:left;
+	font-size:10;
+	borderStyle:none;
+	font-family:'宋体';
+	font-weight:normal;
+	color:#000000;
+}
+.NoBorderText{
+	text-align:left;
+	borderStyle:none;
+	font-size:14;
+}
+.leftText{
+	text-align:left;
+	font-size:40;
+}
+.saveBtn{
+	icon:Embed(source="img/save16x16.png");
+	downIcon:Embed(source="img/save16x16.png");
+}
+.returnBtn{
+	icon:Embed(source="img/return16x16.png");
+	downIcon:Embed(source="img/return16x16.png");
+}
+
+.penBtn{
+	icon:Embed(source="img/pen16x16.png");
+	downIcon:Embed(source="img/pen16x16.png");
+}
+.ellipseBtn{
+	icon:Embed(source="img/ellipse16x16.png");
+	downIcon:Embed(source="img/ellipse16x16.png");
+}
+.rectBtn{
+	icon:Embed(source="img/rect16x16.png");
+	downIcon:Embed(source="img/rect16x16.png");
+}
+.lineBtn{
+	icon:Embed(source="img/line16x16.png");
+	downIcon:Embed(source="img/line16x16.png");
+}
+.gotoBtn{
+	icon:Embed(source="img/goto16x16.png");
+	downIcon:Embed(source="img/goto16x16.png");
+}
+.rullerBtn{
+	icon:Embed(source="img/ruller16x16.png");
+	downIcon:Embed(source="img/ruller16x16.png");
+}
+.delBtn{
+	icon:Embed(source="img/del16x16.png");
+	downIcon:Embed(source="img/del16x16.png");
+}
+.closeBtn{
+	icon:Embed(source="img/close16x16.png");
+	downIcon:Embed(source="img/close16x16.png");
+}
+.aBtn{
+	icon:Embed(source="img/A16x16.png");
+	downIcon:Embed(source="img/A16x16.png");
+}
+.curveBtn{
+	icon:Embed(source="img/curve16x16.png");
+	downIcon:Embed(source="img/curve16x16.png");
+}
+.myComboBox {
+	color:#000000;
+	text-align:left;
+	focus-alpha:0.5;
+	focus-color:#cccccc;
+	border-visible:false;
+	border-color:#000000;
+	border-alpha:0;
+	content-background-color:#ffffff;
+	button-height:22;
+	roll-over-color:#cccccc;
+	chrome-color:#cccccc;
+	/*	symbol-color:#000000;*/
+	padding-left:2;
+	padding-right:2;
+	padding-top:0;
+	padding-bottom:0;
+	textInputStyleName:"myTextInput_1";
+	font-family:'宋体';
+}
+.myTextInput_1{
+	color:#000000;
+	focus-alpha:0.5;
+	focus-color:#cccccc;
+	border-visible:false;
+	background-color:#ffffff;
+	content-background-color:#ffffff;
+	borderColor:#000000;
+	text-align:left;
+	font-family:'宋体';
+}

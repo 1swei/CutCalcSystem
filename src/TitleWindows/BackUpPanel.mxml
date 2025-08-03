@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" verticalCenter="0" horizontalCenter="0" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="titlewindow1_creationCompleteHandler(event)"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="500" height="400" title="数据备份" close="close()">
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			import common.FileUtil;
+			import common.MyEncrypt;
+			
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			
+			import skins.PopUpEffect;
+			
+			private var file:File;
+			protected function titlewindow1_creationCompleteHandler(event:FlexEvent):void
+			{
+				//创建目录
+				FileUtil.createDirFile(new File("C:\\"),"CNSBackup");
+			}
+			private function close():void{
+				PopUpEffect.Hide(this);
+			}
+			private function backUp():void{
+				var path:String=FileUtil.backUpPath+DateFormatHelper.Format13(new Date());
+				file =new File(path);
+				file.browseForSave("请选择备份位置");
+				//单击保存按钮派发事件。
+				file.addEventListener(Event.SELECT,getSavePathHandler);
+				//单击取消按钮将判断条件回置为初始状态。
+				file.addEventListener(Event.CANCEL,function():void{file = null;return;});
+			}
+			private function getSavePathHandler(event:Event):void
+			{
+				//数据库
+				if(FileUtil.copyDirFile(new File(FileUtil.dataBasePath),new File(event.currentTarget.nativePath+"\\CNSystem.db"))
+				//窗型图
+				&&FileUtil.copyDirFile(new File(FileUtil.winRemotePath),new File(event.currentTarget.nativePath+"\\windows"))){
+					
+					Alert.show("备份成功","提示");
+				}
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%" verticalAlign="middle" horizontalAlign="center" paddingLeft="10" paddingRight="10" verticalGap="170">
+		<mx:VBox horizontalAlign="left" verticalAlign="top">
+			<s:Label text="备份说明："/>
+			<s:Label text="   该备份功能可以备份数据和窗型图"/>
+			<s:Label text="   路径可以自行选择，默认C:/CNSBackup"/>
+			<s:Spacer height="30"/>
+			<s:Label text="还原说明："/>
+			<s:Label text="   手动把备份目录下的windows文件夹和CNSystem.db文件"/>
+			<s:Label text="   覆盖至远程目录（若忘记该目录地址，可在我的文档CNConfig.xml中查看）"/>
+		</mx:VBox>
+			
+		<mx:HBox width="100%" horizontalAlign="center" height="30" verticalAlign="bottom" >
+			<s:Button label="数据备份" click="backUp()" buttonMode="true"/>
+		</mx:HBox>
+	</mx:VBox>
+</s:TitleWindow>

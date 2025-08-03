@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:SparkSkin xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			 xmlns:s="library://ns.adobe.com/flex/spark" 
+			 xmlns:mx="library://ns.adobe.com/flex/mx" width="2" height="20">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		override protected function initializationComplete():void
+		{
+			useChromeColor = true;
+			super.initializationComplete();
+		}
+	</fx:Script>
+	
+	<!-- layer 1: opaque white bg fill -->
+
+	
+	<!-- layer 2: fill-->
+	
+	<s:Rect left="0" right="0" bottom="1"   top="0" >
+		<s:fill>
+			<s:LinearGradient rotation="90">
+				<s:GradientEntry color="0x86a0b5" alpha="1"  ratio="0"/>
+				<s:GradientEntry color="0x86a0b5" alpha="1"   ratio="1"/>
+			</s:LinearGradient>
+		</s:fill>
+	</s:Rect>
+	
+	
+	<s:Rect left="0" right="0" top="0" bottom="8"  >
+		<s:fill>
+			<s:LinearGradient rotation="90">
+				<s:GradientEntry color="0x86a0b5"   ratio="0"
+								 alpha="1" />
+				
+				
+				<s:GradientEntry color="0x86a0b5"   ratio="1"
+								 alpha="1" />
+				
+			</s:LinearGradient>
+		</s:fill>
+	</s:Rect> 
+	
+	<!-- layer 3: fill lowlight -->
+
+	
+</s:SparkSkin>

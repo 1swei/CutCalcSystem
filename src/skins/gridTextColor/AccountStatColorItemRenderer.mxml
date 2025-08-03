@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Label xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			override public function set data(value:Object):void{
+				super.data = value;
+				if(data.smallAmount>0&&data.smallAmount>data.amount*0.01){
+					this.setStyle("color",0xc61a04);
+				}else{
+					this.setStyle("color",0x000000);
+				}
+			}
+			
+		]]>
+	</fx:Script>
+</mx:Label>

@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009"  creationComplete="oncomplete(event)" title="物料选择"
+			   xmlns:s="library://ns.adobe.com/flex/spark" close="closeDoc()" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="500" height="550"
+			   xmlns:commonGroup="commonGroup.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import common.ArrayCollectionUtil;
+			import common.CopyUtil;
+			import common.DataCmdEvent;
+			import common.FlexClientConfig;
+			
+			import commonGroup.MaterialImport;
+			
+			import entity.Group;
+			import entity.Material;
+			import entity.MaterialType;
+			
+			import flash.utils.setTimeout;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.remoting.RemoteObject;
+			
+			import skins.PopUpEffect;
+			
+			import util.TreeUtil;
+			[Bindable]
+			private var materialTreeTypes:ArrayCollection;//自定义类型
+			[Bindable]
+			private var materials:ArrayCollection;//物料集合
+			[Bindable]
+			private var mtlGroups:ArrayCollection=new ArrayCollection;//预选集合
+			[Bindable]
+			private var selectedType:MaterialType;//tree当前选中的类型
+			[Bindable]
+			private var materialAllTypes:ArrayCollection;
+			public static const IMPORT:String="MATERIAL_IMPORT_WINDOW";
+			public static const CLOSE:String="MATERIAL_CLOSE";
+			protected function oncomplete(event:FlexEvent):void{
+				mtlImport.addEventListener(MaterialImport.IMPORT,importMtl);
+				getGroups();
+			}
+			
+			private function getGroups():void
+			{
+				this.mtlGroups=Group.findAll(false,true);
+			}
+			public function importMtl(e:DataCmdEvent):void{
+				this.dispatchEvent(new DataCmdEvent(IMPORT,e.data as Material));
+			}
+			private function closeDoc():void{
+				PopUpManager.removePopUp(this);
+				this.dispatchEvent(new Event(CLOSE));
+				//PopUpEffect.Hide(this);
+			}
+			public function checkMtlGroup(group:Group):void{
+				if(group!=null&&group.materials&&group.materials.length>0){
+					for each(var material:Material in group.materials){
+						this.dispatchEvent(new DataCmdEvent(IMPORT,material));
+					}
+				}
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VDividedBox width="100%" height="100%" verticalGap="6">
+		<commonGroup:MaterialImport id="mtlImport" width="100%" height="100%"/>
+		<mx:HBox width="100%" height="90">
+			<mx:VBox verticalAlign="middle" width="22" height="100%">
+				<mx:Label text="物"/>
+				<mx:Label text="料"/>
+				<mx:Label text="组"/>
+			</mx:VBox>
+			<s:List dataProvider="{mtlGroups}" height="100%" width="100%" borderColor="{FlexClientConfig.getInstance().Theme}">
+				<s:layout>
+					<s:TileLayout requestedColumnCount="4" horizontalAlign="center"/>
+				</s:layout>
+				<s:itemRenderer>
+					<fx:Component>
+						<mx:HBox verticalAlign="middle" horizontalAlign="left" paddingLeft="2">
+							<mx:CheckBox label="{data.name}" change="checkbox_changeHandler(event)" toolTip="{data.materialsMsg}" buttonMode="true">
+								
+								<fx:Script>
+									<![CDATA[
+										import entity.Group;
+										
+									
+										protected function checkbox_changeHandler(event:Event):void
+										{
+											var theCheck:Boolean=event.currentTarget.selected as Boolean;
+											if(theCheck){
+												outerDocument.checkMtlGroup(data as Group);
+											}
+											event.currentTarget.selected=theCheck;
+										}
+										
+									]]>
+								</fx:Script>
+							</mx:CheckBox>
+						</mx:HBox>
+					</fx:Component>
+				</s:itemRenderer>
+			</s:List>
+		</mx:HBox>
+	</mx:VDividedBox>
+</s:TitleWindow>

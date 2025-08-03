@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="编码设置" creationComplete="complete(event)"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="600" height="350" close="close()"
+			   horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" >
+	<fx:Script>
+		<![CDATA[
+			import entity.CodeSet;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.dataGridClasses.DataGridItemRenderer;
+			import mx.controls.dataGridClasses.DataGridListData;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			import mx.managers.PopUpManager;
+			import mx.utils.StringUtil;
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			[Bindable]
+			public var yymmArray:ArrayCollection = new ArrayCollection([{label:"年",value:"YY"},{label:"年月",value:"YYMM"},{label:"年月日",value:"YYMMDD"}]);
+			
+			protected function complete(event:FlexEvent):void
+			{
+				getCodes();
+			}
+			
+			public function getCodes():void
+			{
+				dataArray=CodeSet.findAll();
+			}
+			
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			
+			public function yyMMddLabelFunction(obj:Object,col:DataGridColumn):String{
+				var cmd:String = obj[col.dataField];
+				if(cmd == "YY"){
+					return "年";
+				}else if(cmd == "YYMM"){
+					return "年月";
+				}else if(cmd == "YYMMDD"){
+					return "年月日";
+				}else{
+					return "";
+				}
+			}
+			public function codeLabelFunction(obj:Object,col:DataGridColumn):String{
+				var num:CodeSet = obj as CodeSet;
+				if(num!=null){
+					var result:String=StringUtil.trim(num.code)+StringUtil.trim(num.format);
+					for(var i:int=0;i<num.digit;i++){
+						result+="0";
+					}
+					return result;
+				}else{
+					return null;
+				}
+			}
+			public function save():void{
+				if(validation()){
+					saveAll();
+					close();
+				}
+			}
+			private function saveAll():void{
+				if(dataArray==null||dataArray.length==0){
+					return;
+				}
+				for each(var code:CodeSet in dataArray){
+					CodeSet.update(code);
+				}
+			}
+			private function validation():Boolean{
+				var result:Boolean = true;
+				var ary:Array = new Array(); //存编号的数组 ，用于判断是否重复
+				
+				if(dataArray!=null&&dataArray.length>0){
+					var n:CodeSet = null;
+					for(var i:int=0;i<dataArray.length;i++){
+						n = dataArray.getItemAt(i) as CodeSet;
+						ary.push(StringUtil.trim(n.code));
+						if(n==null){
+							continue;
+						}
+						if(n.code==null||StringUtil.trim(n.code).length<=0){
+							Alert.show(""+n.name+" 编号 开头字母不能为空！","提示");
+							result = false;
+							break;
+						}
+						if(n.format==null||n.format==""){
+							Alert.show(""+n.name+" 编号"+n.code+" 日期格式类型为空！","提示");
+							result = false;
+							break;
+						}
+						if(n.repeat>28){
+							Alert.show(""+n.name+" 编号"+n.code+" 立账日不能大于每月28号！","提示");
+							result = false;
+							break;
+						}
+						if(n.format=="yy"&&n.digit<7){
+							Alert.show(""+n.name+" 编号"+n.code+" 序号位数必须大于等于 7 位 ！","提示");
+							result = false;
+							break;
+						}else if(n.format=="yyMM"&&n.digit<5){
+							Alert.show(""+n.name+" 编号"+n.code+" 序号位数必须大于等于 5 位 ！","提示");
+							result = false;
+							break;
+						}else if(n.format=="yyMMdd"&&n.digit<3){
+							Alert.show(""+n.name+" 编号"+n.code+" 序号位数必须大于等于 3 位 ！","提示");
+							result = false;
+							break;
+						}
+						if(n.digit>20){
+							Alert.show(""+n.name+" 编号"+n.code+" 计数位数必须小于 20 ！","提示");
+							result = false;
+							break;
+						}
+					}
+					
+					var nAry:Array = [];
+					ary.forEach(function(item:*, idx:int, ary:Array):void {
+						if(nAry.indexOf(item)==-1){
+							nAry.push(item);
+						}else{
+							Alert.show("编码字母 "+item+" 重复 ！","提示");
+							result = false;
+						}
+					});
+				}
+				return result;
+			}
+			public function close():void{
+				dataArray = null;
+				PopUpManager.removePopUp(this);
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox verticalGap="2" width="100%" height="100%">
+		<mx:HBox width="100%" paddingLeft="2" paddingTop="2" paddingBottom="2"
+				 verticalAlign="middle" horizontalGap="4" >
+			
+		</mx:HBox>
+		<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" 
+					 sortableColumns="false" editable="true">
+			<mx:columns>
+				<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40" editable="false"/>
+				<mx:DataGridColumn headerText="单据名称" dataField="name" textAlign="left" editable="false"/>
+				<mx:DataGridColumn headerText="字母" width="50" dataField="code">
+					<mx:itemEditor>
+						<fx:Component>
+							<mx:TextInput maxChars="5" restrict="A-Z"/>
+						</fx:Component>
+					</mx:itemEditor>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="日期类型" dataField="format" width="90" editable="false" labelFunction="yyMMddLabelFunction">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox>
+								<fx:Script>
+									<![CDATA[
+										
+										import common.ArrayCollectionUtil;
+										
+										import mx.events.ListEvent;
+										
+										protected function combobox1_changeHandler(event:ListEvent):void
+										{
+											if(comb.selectedItem==null){
+												return;
+											}
+											data.format = comb.selectedItem.value;
+										}
+										
+									]]>
+								</fx:Script>
+								<mx:ComboBox id="comb" change="combobox1_changeHandler(event)" labelField="label" dataProvider="{outerDocument.yymmArray}"
+											 selectedIndex="{ArrayCollectionUtil.getIndex(data.format,outerDocument.yymmArray,'value',-1)}"/>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="计数位数" dataField="digit" width="65">
+					<mx:itemEditor>
+						<fx:Component>
+							<mx:TextInput restrict="0-9" />
+						</fx:Component>
+					</mx:itemEditor>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="立账日" dataField="repeat" width="55">
+					<mx:itemEditor>
+						<fx:Component>
+							<mx:TextInput restrict="0-9" />
+						</fx:Component>
+					</mx:itemEditor>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn editable="false" headerText="格式预览" labelFunction="codeLabelFunction"/>
+			</mx:columns>
+		</mx:DataGrid>
+		<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle">
+			<s:Button label="保存" click="save()"/>
+			<s:Button label="关闭" click="close()"/>
+		</mx:HBox>
+	</mx:VBox>
+</s:TitleWindow>

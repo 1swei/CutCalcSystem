@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Module xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="onComplete(event)"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%"
+		  xmlns:ns="http://code.google.com/p/flexlib/">
+	
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			
+			import entity.Customer;
+			import entity.Sell;
+			import entity.SellReport;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			/*↓↓↓↓↓↓↓↓  变量区  ↓↓↓↓↓↓↓↓  */
+			[Bindable] private var dataArray:ArrayCollection;
+			[Bindable] public var custArray:ArrayCollection;
+			/*↑↑↑↑↑↑↑↑  变量区  ↑↑↑↑↑↑↑↑ */
+			protected function onComplete(event:FlexEvent):void{
+				selectCust();//下拉框方法
+			}
+			/**序号自增1*/
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(obj.xu=="合计"){
+					return "合计";
+				}
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			private function selectCust():void{
+				custArray=Customer.getCustomers();
+			}
+			private function select():void{
+				var obj:Object = new Object();
+				obj.beginDate = beginDate.selectedDate;
+				obj.endDate = endDate.selectedDate;
+				obj.cust = combo.text;
+				obj.context = context.text;
+				dataArray=SellReport.findByParam(obj);
+				combined();
+			}
+			//合计金额,在dataArray的最后添加一条记录.
+			private function combined():void{
+				var num:Number=0.0;
+				for(var i:int;i<dataArray.length;i++){
+					num += dataArray[i].amount;
+				}
+				var obj:Object = new Object();
+				obj.amount = num.toFixed(2);
+				obj.xu = "合计";
+				dataArray.addItem(obj);
+			}
+		]]>
+	</fx:Script>
+	<mx:VBox width="100%" height="100%" verticalGap="2">
+		<mx:HBox verticalAlign="middle" >
+			
+			<mx:ComboBox id="combo" labelField="name" dataProvider="{custArray}" prompt="所有客户" change="select()" height="24"/>
+			<s:Label text="下单时间："/>
+			<mx:DateField  id="beginDate" selectedDate="{DateFormatHelper.getDateBefore(30)}" 
+						   yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+						   selectableRange="{{ rangeEnd : endDate.selectedDate}}" change="" />
+			<s:Label text="至"/>
+			<mx:DateField id="endDate" selectedDate="{new Date()}"
+						  yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+						  selectableRange="{{rangeStart : beginDate.selectedDate}}" change=""/>
+			<ns:PromptingTextInput id="context" prompt="综合搜索" enter="select()"/>
+			<mx:Button label="查询" click="select()" height="24" />
+		</mx:HBox>
+		<s:Group width="100%" height="100%">
+			<mx:DataGrid id="dataGrid" width="100%" height="100%" dataProvider="{dataArray}" doubleClickEnabled="true" >
+				<mx:columns>
+					<mx:DataGridColumn headerText="序号" dataField="xu" labelFunction="indexLabelFunction" width="55"/>
+					<mx:DataGridColumn headerText="销售单号" dataField="code" width="90" />
+					<mx:DataGridColumn headerText="客户名称" dataField="custName" width="200" />
+					<mx:DataGridColumn headerText="物料名称" dataField="materialName" width="145" />
+					<mx:DataGridColumn headerText="单位" dataField="unit"/>
+					<mx:DataGridColumn headerText="数量" dataField="number" textAlign="right"/>
+					<mx:DataGridColumn headerText="单价" dataField="price" textAlign="right"/>
+					<mx:DataGridColumn headerText="金额" dataField="amount" textAlign="right"/>
+					<mx:DataGridColumn headerText="备注" dataField="memo"/>
+				</mx:columns>
+			</mx:DataGrid>
+		</s:Group>
+	</mx:VBox>
+</mx:Module>

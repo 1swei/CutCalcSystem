@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menuitem>
+	<menuitem visible="true" label="业务管理">
+		<menuitem label="客户" mod="../module/CustomerModule.swf" visible="true" ico="CustomerIco"/>
+		<menuitem label="订单" mod="../module/OrderModule.swf" visible="true" ico="OrderIco"/>
+		<menuitem label="销售" mod="../module/SellModule.swf" visible="true" ico="SellIco"/>
+	</menuitem>
+	<menuitem visible="true" label="采购管理">
+		<menuitem label="采购" mod="../module/PurchaseModule.swf" visible="true" ico="PurchaseIco"/>
+	</menuitem>
+	<menuitem visible="true" label="对账管理">
+		<menuitem label="应收应付" mod="../module/AccountStatModule.swf" visible="true" ico="AccountStatIco"/>
+	</menuitem>
+	<menuitem visible="true" label="系统配置">
+		<menuitem label="型材配置" titlewin="AluProfilePanel" visible="true" ico="AluProIco"/>
+		<menuitem label="型材颜色" titlewin="ColorManage" visible="true" ico="ColorIco"/>
+		<menuitem label="窗型" titlewin="CustomFormulaDoc" visible="true" ico="WindowIco"/>
+		<menuitem label="物料" mod="../module/MaterialModule.swf" visible="true" ico="MaterialIco"/>
+		<menuitem label="二维码" titlewin="QrCodePanel" visible="true" ico="QrcodeIco"/>
+		<menuitem label="单据编号" titlewin="CodeSetWin" visible="true" ico="CodeIco"/>
+	</menuitem>
+	<menuitem visible="true" label="统计中心">
+		<menuitem label="销售明细表" mod="../module/SellReportModule.swf" visible="true" ico="ListIco"/>
+		<menuitem label="汇总看板" mod="../module/HomeModule.swf" visible="true" ico="ListIco"/>
+		<menuitem label="开料明细统计表" mod="../module/OrderDetailReport.swf" visible="true" ico="ListIco"/>
+	</menuitem>
+	<menuitem visible="true" label="帮助">
+		<menuitem label="备份" titlewin="BackUpPanel" visible="true" ico="BackupIco"/>
+		<menuitem label="说明" titlewin="ExplainPanel" visible="true" ico="ExampleIco"/>
+<!-- 		<menuitem label="维护" titlewin="FixData" visible="true" ico="FixIco"/> -->
+	</menuitem>
+</menuitem>

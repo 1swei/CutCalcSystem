@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Module xmlns:fx="http://ns.adobe.com/mxml/2009" creationComplete="getCustomers();"
+		  xmlns:s="library://ns.adobe.com/flex/spark" 
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" 
+		  horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" >
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			import common.MecExporterHelper;
+			
+			import entity.Customer;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			private var filteArray:ArrayCollection = new ArrayCollection();
+			public var dataAllArray:ArrayCollection;
+			
+			[Bindable]
+			public var edit:Boolean=true;//是否能编辑
+			
+			private var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			
+			public function getCustomers():void
+			{
+				this.dataArray=Customer.getCustomers();
+				dataAllArray = new ArrayCollection(dataArray.source);
+			}
+			public function setData(_edit:Boolean=true):void{
+				edit=_edit;
+			}
+			
+			protected function createCustomer(event:MouseEvent):void
+			{
+				var item:Customer=new Customer();
+				if(dataArray==null){
+					dataArray=new ArrayCollection();
+				}
+				dataArray.addItem(item);
+			}
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			
+			protected function dataGrid_itemEditEndHandler(event:DataGridEvent):void
+			{
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				var text:String=ti.text;
+				var item:Customer=dataGrid.selectedItem as Customer;
+				item[event.dataField]=text;
+				//这个方法不能刷新dataArray 不然会执行2次
+				if(item.id==0){
+					Customer.insert(item);
+				}else{
+					Customer.update(item);
+				}
+			}
+			
+			
+			protected function deleteCustomer(event:MouseEvent):void
+			{
+				Alert.show("删除后数据不可恢复，是否继续？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler);
+				
+				
+			}
+			private function alertCloseHandler(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					statement.text = "delete from Customer where id="+dataGrid.selectedItem.id+"";
+					statement.execute();
+					this.getCustomers();
+				}
+			}
+			
+			
+			protected function select(event:Event):void
+			{
+				filteArray = dataArray as ArrayCollection;
+				if(textIn.text!=null&&textIn.text.length>0){
+					filteArray.filterFunction = filteDataByInput; 
+					filteArray.refresh();
+				}else{
+					filteArray.filterFunction = null; 
+					filteArray.refresh();
+				}
+			}
+			private function filteDataByInput(item:Object):Boolean
+			{
+				var result:Boolean=false;//返回值
+				if(textIn.text!=null&&textIn.text.length>0)
+				{
+					//名称
+					if(String(item["name"]).indexOf(textIn.text)>=0)
+					{
+						result=true;
+					}
+					//号码
+					if(!result&&String(item["phone"]).indexOf(textIn.text)>=0)
+					{
+						result=true;
+					}
+				}
+				return result;
+			}
+			
+			protected function exportExcel():void
+			{
+				MecExporterHelper.getInstance().export("客户表.xls", config, dataArray);
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+		<fx:XML id="config">
+			<List> 
+				<option cols="3" fixedrows="1"/>
+				<columns> 
+					<column datafield="name" visible="T"  colindex="0" autowidth="T" width="150" datatype="5" textalign="4" textalign_fixed="10"  header="客户名称"/> 
+					<column datafield="address" visible="T" colindex="1" autowidth="T" width="120" datatype="5" textalign="10" textalign_fixed="10"  header="地址"/> 
+					<column datafield="phone" visible="T" colindex="2" autowidth="T" width="100" datatype="4" textalign="10" textalign_fixed="10"  header="电话"/> 
+				</columns> 
+			</List>
+		</fx:XML>
+	</fx:Declarations>
+	<mx:VBox verticalGap="2" width="100%" height="100%">
+		<mx:HBox width="100%" paddingBottom="2" verticalAlign="middle" horizontalGap="4" visible="{edit}" includeInLayout="{edit}">
+			<mx:Button label="新建" height="24" click="createCustomer(event)"/>
+			<mx:Button label="删除" height="24" click="deleteCustomer(event)" enabled="{dataGrid.selectedItem!=null}"/>
+			<mx:Button label="导出" height="24" click="exportExcel()" enabled="{dataArray.length>0}"/>
+			<mx:TextInput height="23" width="120" change="select(event)" id="textIn"/>
+		</mx:HBox>
+		<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" editable="{edit}" itemEditEnd="dataGrid_itemEditEndHandler(event)">
+			<mx:columns>
+				<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40" editable="false"/>
+				<!--<mx:DataGridColumn dataField="code" headerText="客户编码" textAlign="left" width="100" />-->
+				<mx:DataGridColumn dataField="name" headerText="客户名称" textAlign="left" width="100" />
+				<mx:DataGridColumn dataField="address" headerText="客户地址" textAlign="left" width="300" />
+				<mx:DataGridColumn dataField="phone" headerText="客户电话" textAlign="left" width="120" />
+				<mx:DataGridColumn dataField="state" width="45" headerText="状态" editable="false">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" dataChange="zty(data)">				
+								<mx:Image id="pic" />
+								<fx:Script>
+									<![CDATA[
+										import entity.Customer;
+										
+										import mx.core.FlexGlobals;
+										private function zty(u:Object):void{
+											var data:Customer=u as Customer;
+											if(data!=null){
+												if(data.state=="Y"){
+													pic.source = FlexGlobals.topLevelApplication.YES_IMG;
+													pic.toolTip = "已启用";
+												}else{
+													pic.source = FlexGlobals.topLevelApplication.NO_IMG;
+													pic.toolTip = "已停用";
+												}
+											}
+										}
+									]]>
+								</fx:Script>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>	
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+	</mx:VBox>
+</mx:Module>

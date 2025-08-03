@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="成本预览" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="titlewindow1_creationCompleteHandler(event)"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="900" height="520" close="PopUpEffect.Hide(this);"
+			   horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" >
+	<fx:Script>
+		<![CDATA[
+			import common.DataFormat;
+			import common.WorkPrice;
+			
+			import entity.Orders;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			import mx.events.ListEvent;
+			
+			import skins.PopUpEffect;
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			[Bindable]
+			public var dataArrayDetail:ArrayCollection;
+			
+			
+			[Bindable]
+			public var amount:Number=0;
+			[Bindable]
+			public var weight:Number=0;
+			[Bindable]
+			public var area:Number=0;
+			[Bindable]
+			public var amount2:Number=0;
+			[Bindable]
+			public var weight2:Number=0;
+			[Bindable]
+			public var area2:Number=0;
+			
+			[Bindable]
+			public var theWorkPrice:WorkPrice;
+			
+			[Bindable]
+			public var order:Orders;
+			
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			} 
+			private function indexLabelFunction2(obj:Object,col:DataGridColumn):String{
+				if(dataArrayDetail!=null&&dataArrayDetail.length>0){
+					return ""+( dataArrayDetail.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			} 
+			
+			public function setData(item_z:Orders,array:ArrayCollection):void{
+				dataArray = array;
+				order = item_z;
+				amount=0;
+				weight=0;
+				area = 0;
+				if(dataArray!=null&&dataArray.length>0){
+					for(var i:int =0;i<dataArray.length;i++){
+						var obj:Object = dataArray.getItemAt(i);
+						amount += obj.amount;
+						weight += obj.weight;
+						area += obj.area;
+					}
+				}
+			}
+			
+			protected function titlewindow1_creationCompleteHandler(event:FlexEvent):void
+			{
+				// TODO Auto-generated method stub
+			}
+			
+			protected function dataGrid_itemClickHandler(event:ListEvent):void
+			{
+				detailBox.visible=true;
+				detailBox.includeInLayout=true;
+				theWorkPrice = event.itemRenderer.data as WorkPrice;
+				dataArrayDetail = theWorkPrice.detail;
+				amount2 = 0;
+				weight2 = 0;
+				if(dataArrayDetail!=null&&dataArrayDetail.length>0){
+					for(var i:int =0;i<dataArrayDetail.length;i++){
+						var obj:Object = dataArrayDetail.getItemAt(i);
+						amount2 += obj.amount;
+						weight2 += obj.weight;
+					}
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:HDividedBox width="100%" height="100%">
+		<mx:VBox width="100%" height="100%">
+			<mx:HBox>
+				<mx:Label text="核价单："/>
+				<mx:Label text="{order.khName}"/>
+			</mx:HBox>
+			<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" itemClick="dataGrid_itemClickHandler(event)">
+				<mx:columns>
+					<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40" editable="false"/>
+					<mx:DataGridColumn dataField="name" headerText="型材" textAlign="left" width="125"/>
+					<mx:DataGridColumn dataField="size" headerText="尺寸" textAlign="left" />
+					<mx:DataGridColumn dataField="area" headerText="面积(㎡)" textAlign="left" />
+					<mx:DataGridColumn dataField="weight" headerText="总重量(kg)" textAlign="left" color="blue">
+						<mx:itemEditor>
+							<fx:Component>
+								<mx:TextInput restrict="0-9." />
+							</fx:Component>
+						</mx:itemEditor>
+					</mx:DataGridColumn>
+					<mx:DataGridColumn dataField="loss" headerText="损耗" textAlign="left" color="blue"/>
+					<mx:DataGridColumn dataField="price" headerText="单价" textAlign="left" color="blue"/>
+					<mx:DataGridColumn dataField="amount" headerText="金额" textAlign="left" color="red"/>
+					<mx:DataGridColumn dataField="unitPrice" headerText="元/㎡" textAlign="left" color="red"/>
+				</mx:columns>
+			</mx:DataGrid>
+			<mx:HBox width="100%">
+				<s:Spacer width="100%"/>
+				<mx:Label text="总面积：{DataFormat.formatNumber2(area)}㎡"/>
+				<mx:Label text="总重量：{DataFormat.formatNumber2(weight)}kg"/>
+				<mx:Label text="总金额：{DataFormat.formatNumber2(amount)}元" color="red" fontWeight="bold"/>
+			</mx:HBox>
+		</mx:VBox>
+		<mx:VBox width="100%" height="100%" id="detailBox" visible="false" includeInLayout="false">
+			<mx:HBox>
+				<mx:Label text="核价明细："/>
+				<mx:Label text="{theWorkPrice.name}"/>
+				<mx:Label text="{theWorkPrice.size}"/>
+			</mx:HBox>
+			<mx:DataGrid id="dataGrid2" dataProvider="{dataArrayDetail}" width="100%" height="100%" >
+				<mx:columns>
+					<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction2" width="40" editable="false"/>
+					<mx:DataGridColumn dataField="name" headerText="材料" textAlign="left" width="75"/>
+					<mx:DataGridColumn dataField="length" headerText="长度" textAlign="left" width="85"/>
+					<mx:DataGridColumn dataField="number" headerText="数量" textAlign="left" width="55"/>
+					<mx:DataGridColumn dataField="unitWeight" headerText="kg/m" textAlign="left" width="45"/>
+					<mx:DataGridColumn dataField="weight" headerText="重量(kg)" textAlign="left" width="55"/>
+					<mx:DataGridColumn dataField="amount" headerText="金额" textAlign="left" width="65"/>
+				</mx:columns>
+			</mx:DataGrid>
+			<mx:HBox width="100%">
+				<s:Spacer width="100%"/>
+				<mx:Label text="重量：{DataFormat.formatNumber2(weight2)}kg    金额：{DataFormat.formatNumber2(amount2)}元"/>
+			</mx:HBox>
+		</mx:VBox>
+		
+	</mx:HDividedBox>
+	
+</s:TitleWindow>

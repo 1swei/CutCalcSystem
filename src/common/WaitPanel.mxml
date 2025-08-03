@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx" visible="false" width="100%" height="100%" backgroundColor="#000000" backgroundAlpha="0.1">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+
+			[Bindable]
+			public var message:String="数据操作中...";
+			[Bindable]
+			public var message2:String="数据查询中...";
+			
+			public function setMessage(msg:String):void{
+				this.message=msg;
+			}
+			
+			[Bindable]
+			public var labelPlacement:String="center";
+			
+			public function show(msg:String=null):void{
+				if(msg!=null){
+					message=msg;
+				}
+				this.visible=true;
+			}
+			public function hide():void{
+				this.visible=false;
+			}
+			
+			public function get isShow():Boolean{
+				return this.visible;
+			}
+			[Bindable]
+			public var progressBar_width:Number=200;
+		]]>
+	</fx:Script>
+	
+	<mx:ProgressBar id="progressBar" indeterminate="true"  labelPlacement="{labelPlacement}"
+					height="30" width="{progressBar_width}" label="{message}" horizontalCenter="0" verticalCenter="0" color="red"/>
+
+	
+</mx:Canvas>

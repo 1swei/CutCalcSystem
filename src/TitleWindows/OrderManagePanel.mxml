@@ -1,0 +1,378 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="订单" 
+		 initialize="titlewindow1_initializeHandler(event)" creationComplete="init(event)"
+		 xmlns:s="library://ns.adobe.com/flex/spark" close="PopUpEffect.Hide(this);"
+		 xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:my="skins.my.*"
+		 xmlns:common="common.*" xmlns:skins="skins.*" >
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			
+			import entity.AluPro;
+			import entity.Colors;
+			import entity.OrderDetailBL;
+			import entity.OrderDetails;
+			import entity.Orders;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.Application;
+			import mx.core.FlexGlobals;
+			import mx.effects.Fade;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			private var dataAllArray:ArrayCollection = new ArrayCollection();
+			[Bindable]public var aluProArray:ArrayCollection;
+			private var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			
+			protected function titlewindow1_initializeHandler(event:FlexEvent):void
+			{
+				this.width=FlexGlobals.topLevelApplication.stage.stageWidth;
+				this.height=FlexGlobals.topLevelApplication.stage.stageHeight; 
+			}
+			
+			protected function openCreatePanel(event:MouseEvent):void
+			{
+				showOrderDetailPanel(new Orders());
+			}
+			
+			public function modify():void
+			{
+				if(dataGrid.selectedItem==null){
+					Alert.show("请先选择需要修改的条目！","提示");
+					return;
+				}
+				var item:Orders=dataGrid.selectedItem as Orders;
+				setItemList(item);
+				showOrderDetailPanel(item);
+			}
+			public function setItemList(item:Orders):void{
+				item.list=getOrderDetailsById(item.id);
+				var order_m:OrderDetails;
+				//给型材配置赋值不然点加号再选玻璃报错。
+				for(var i:int=0;i<item.list.length;i++){
+					order_m = item.list.getItemAt(i) as OrderDetails;
+					order_m.setAluPro(aluProArray);
+					order_m.blList=OrderDetailBL.getbyParam(order_m.id);
+				}
+			}
+			private function showOrderDetailPanel(item:Orders):void{
+				var panel:OrderDetailPanel=new OrderDetailPanel();
+				if(item.list==null){
+					item.list = new ArrayCollection();
+				}
+				if(item.list!=null&&item.list.length==0){
+					item.list.addItem(new OrderDetails());
+				}
+				PopUpEffect.Show(panel,this);
+				panel.setData(item,item.list.getItemAt(0) as OrderDetails);
+				panel.owner = this;
+			}
+			
+			protected function init(event:FlexEvent):void
+			{
+				getOrders();
+				aluProArray = AluPro.getAluPros();
+			}
+			public function getOrders():void
+			{
+				statement.text = "SELECT * from Orders";
+				statement.itemClass=Orders;
+				statement.execute();
+				result();
+			}
+			public function getOrderDetailsById(id:int):ArrayCollection{
+				statement.text = "SELECT * from OrderDetails where orderId="+id+"";
+				statement.itemClass=OrderDetails;
+				statement.execute();
+				var result:SQLResult = statement.getResult();
+				return new ArrayCollection(result.data);
+			}
+			private function result():void
+			{
+				var result:SQLResult = statement.getResult();
+				if (result != null) {  
+					this.dataArray = new ArrayCollection(result.data);
+					dataAllArray = new ArrayCollection(result.data);
+					dataArray_refrech();
+					//dataGrid.validateNow();
+				}
+				
+			}
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			import r1.deval.D;
+			private var filterArray:Array = new Array();
+			private function dataArray_refrech():void{
+				var str:String = "";
+				if((str=StringUtil.trim(textIn.text)).length>0){
+					filterArray = str.split(" ");
+				}else{
+					filterArray = new Array();
+				}
+				var array:ArrayCollection = new ArrayCollection(dataAllArray.toArray());
+				if(array!=null&&array.length>0){
+					array.filterFunction = rwbAllArrayFilterFunction;
+					array.refresh();
+				}
+				dataArray = new ArrayCollection(array.toArray());
+			}
+			
+			private function rwbAllArrayFilterFunction(item:Orders):Boolean{
+				var result:Boolean = true;
+				//出库类别
+				/* if(result&&this.View.rkType.selectedItem.cmd!="RKD"&&this.View.rkType.selectedItem.cmd!=rwb.rwb003){
+					result = false;
+				} */
+				if(result&&stateIn.selectedIndex>0){
+					if(stateIn.selectedIndex==1&&item.stateIn!="N"){
+						result = false;
+					}else if(stateIn.selectedIndex==2&&item.stateIn!="Y"){
+						result = false;
+					}
+					
+				}
+				if(result&&stateOut.selectedIndex>0){
+					if(stateOut.selectedIndex==1&&item.stateOut!="N"){
+						result = false;
+					}else if(stateOut.selectedIndex==2&&item.stateOut!="Y"){
+						result = false;
+					}
+					
+				}
+				if(result&&item.xdTime!=null){
+					if(beginDate.selectedDate!=null
+						&&DateFormatHelper.Format1(beginDate.selectedDate)>item.xdTime){
+						result = false;
+					}
+					if(endDate.selectedDate!=null
+						&&DateFormatHelper.Format1(endDate.selectedDate)+" 24:59"<=item.xdTime){
+						result = false;
+					}
+				}
+				if(result&&filterArray!=null&&filterArray.length>0){
+					var i:int = filterArray.length;
+					for each(var s:String in filterArray){ 
+						if(s==null||(s=StringUtil.trim(s)).length<=0){
+							i--;
+							continue;
+						}
+						if((item.khName!=null&&item.khName.indexOf(s)>-1)
+							||(item.zhaiyao!=null&&item.zhaiyao.indexOf(s)>-1)
+							||(item.bz!=null&&item.bz.indexOf(s)>-1)
+						){
+							i--;
+						}
+					}
+					result = (i==0?true:false);
+				}
+				
+				
+				return result;
+				
+			}
+			public function deleteDate():void{
+				Alert.show("删除后数据不可恢复，是否继续？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler);
+			}
+			private function alertCloseHandler(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					statement.text = "delete from Orders where id="+dataGrid.selectedItem.id+"";
+					statement.execute();
+					statement.text = "delete from OrderDetails where orderId="+dataGrid.selectedItem.id+"";
+					statement.execute();
+					getOrders();
+				}
+			}
+			public function update(id:int,type:String):void
+			{
+				if(type=="Out"){
+					statement.text = "update Orders set stateOut='Y' where id="+id+"";
+				}else{
+					statement.text = "update Orders set stateIn='Y' where id="+id+"";
+				}
+				statement.execute();
+				getOrders();
+			}
+			
+			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox verticalGap="2" width="100%" height="100%">
+		<mx:HBox width="100%" paddingLeft="2" paddingTop="2" paddingBottom="2" verticalAlign="middle" horizontalGap="4" >
+			<mx:Button label="新建订单" height="24" click="openCreatePanel(event)" buttonMode="true"/>
+			<mx:Button label="修改订单" height="24" click="modify()" enabled="{dataGrid.selectedItem!=null}" buttonMode="true"/>
+			<mx:Button label="删除订单" height="24" click="deleteDate()" enabled="{dataGrid.selectedItem!=null}" buttonMode="true"/>
+		</mx:HBox>
+		<mx:HBox width="100%" paddingLeft="2" height="25" verticalAlign="middle" horizontalGap="4">
+			<s:Label text="下单时间："/>
+			<skins:MyDateField  id="beginDate" selectedDate="{DateFormatHelper.getDateBefore(2)}" 
+						  selectableRange="{{ rangeEnd : endDate.selectedDate}}" change="getOrders();" />
+			<s:Label text="至"/>
+			<skins:MyDateField id="endDate" selectedDate="{new Date()}"
+						  selectableRange="{{rangeStart : beginDate.selectedDate}}" change="getOrders();"/>
+			<mx:ComboBox id="stateOut" height="24" change="dataArray_refrech()" buttonMode="true">
+				<mx:dataProvider>
+					<s:ArrayCollection>
+						<fx:String>外框状态</fx:String>
+						<fx:String>未完成</fx:String>
+						<fx:String>已完成</fx:String>
+					</s:ArrayCollection>
+				</mx:dataProvider>
+			</mx:ComboBox>
+			<mx:ComboBox id="stateIn" height="24" change="dataArray_refrech()" buttonMode="true" >
+				<mx:dataProvider>
+					<s:ArrayCollection>
+						<fx:String>内扇状态</fx:String>
+						<fx:String>未完成</fx:String>
+						<fx:String>已完成</fx:String>
+					</s:ArrayCollection>
+				</mx:dataProvider>
+			</mx:ComboBox>
+			<mx:Label text="综合搜索"/>
+			<mx:TextInput id="textIn" height="24" width="125" enter="DateFormatHelper.focus(event);getOrders();" creationComplete="textIn.setFocus();" change="dataArray_refrech();"/>
+		</mx:HBox>
+		<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" doubleClickEnabled="true" doubleClick="modify()" 
+					 wordWrap="true" variableRowHeight="true" >
+			<mx:columns>
+				<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40"/>
+				<mx:DataGridColumn dataField="khName" headerText="客户名称" textAlign="left" width="120"/>
+				<mx:DataGridColumn headerText="摘要" width="320" textAlign="left">
+					<mx:itemRenderer>
+						<fx:Component>
+							<common:LabelStyleItemRenderer txt="{data.zhaiyao}"  />
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn dataField="khPhone" headerText="客户电话" textAlign="left" width="125"/>
+				<!--<mx:DataGridColumn dataField="khAddress" headerText="客户地址" textAlign="left" width="125"/>-->
+				<mx:DataGridColumn dataField="xdTime" headerText="下单时间" textAlign="left" width="120" />
+				<mx:DataGridColumn dataField="bz" headerText="备注" textAlign="left" width="200"/>
+				<mx:DataGridColumn dataField="stateOut" width="55" headerText="外框" >
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" dataChange="zty(data)">				
+								<mx:Image id="pic" width="15" height="15" />
+								<fx:Script>
+									<![CDATA[
+										import entity.Orders;
+										
+										import mx.core.FlexGlobals;
+										private function zty(u:Object):void{
+											var data:Orders=u as Orders;
+											if(data!=null){
+												if(data.stateOut=="Y"){
+													pic.source = FlexGlobals.topLevelApplication.YES_IMG;
+													pic.toolTip = "已完成";
+												}else{
+													pic.source = FlexGlobals.topLevelApplication.NO_IMG;
+													pic.toolTip = "未完成";
+												}
+											}
+										}
+									]]>
+								</fx:Script>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>	
+				</mx:DataGridColumn>
+				<mx:DataGridColumn dataField="stateIn" width="55" headerText="内扇" >
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" dataChange="zty(data)">				
+								<mx:Image id="pic" width="15" height="15" />
+								<fx:Script>
+									<![CDATA[
+										import entity.Orders;
+										
+										import mx.core.FlexGlobals;
+										private function zty(u:Object):void{
+											var data:Orders=u as Orders;
+											if(data!=null){
+												if(data.stateIn=="Y"){
+													pic.source = FlexGlobals.topLevelApplication.YES_IMG;
+													pic.toolTip = "已完成";
+												}else{
+													pic.source = FlexGlobals.topLevelApplication.NO_IMG;
+													pic.toolTip = "未完成";
+												}
+											}
+										}
+									]]>
+								</fx:Script>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>	
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="操作" >
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox horizontalAlign="left" horizontalScrollPolicy="off">
+								<fx:Script>
+									<![CDATA[
+										import entity.Orders;
+										
+										import mx.controls.Alert;
+										import mx.events.CloseEvent;
+										
+										import skins.PopUpEffect;
+										
+										protected function overOut_clickHandler(event:MouseEvent):void
+										{
+											// TODO Auto-generated method stub
+											Alert.show("是否确定 外框 完成？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler1);
+										}
+										private function alertCloseHandler1(e:CloseEvent):void{
+											if(e.detail == Alert.YES){
+												outerDocument.update(data.id,"Out");
+											}
+										}
+										protected function overIn_clickHandler(event:MouseEvent):void
+										{
+											Alert.show("是否确定 内扇 完成？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler2);
+										}
+										private function alertCloseHandler2(e:CloseEvent):void{
+											if(e.detail == Alert.YES){
+												outerDocument.update(data.id,"In");
+											}
+										}
+										
+										protected function picView_clickHandler(event:MouseEvent):void
+										{
+											var panel:ViewOrderPicTitle = new ViewOrderPicTitle();
+											var item:Orders=data as Orders;
+											outerDocument.setItemList(item);
+											panel.show(item,null);
+											PopUpEffect.Show(panel,this.parentApplication as DisplayObject);
+											panel.initAllImage();
+										}
+										
+									]]>
+								</fx:Script>
+								<mx:Image id="picView" source="@Embed('img/select.png')" toolTip="图纸" scaleContent="true" click="picView_clickHandler(event)" buttonMode="true" />
+								<mx:Image id="editBtn" source="@Embed('img/edit.png')" toolTip="修改" scaleContent="true" click="outerDocument.modify();" buttonMode="true" />
+								<mx:Image id="overOut" source="@Embed('img/outside.png')" toolTip="外框完成" scaleContent="true" click="overOut_clickHandler(event)" buttonMode="true" enabled="{data.stateOut!='Y'}"/>
+								<mx:Image id="overIn" source="@Embed('img/inside.png')" toolTip="内扇完成" scaleContent="true" click="overIn_clickHandler(event)" buttonMode="true" enabled="{data.stateIn!='Y'}"/>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+	</mx:VBox>
+	<common:WaitPanel id="waitPanel" />
+</s:TitleWindow>

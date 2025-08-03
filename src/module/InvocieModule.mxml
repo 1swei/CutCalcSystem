@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Module xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		  xmlns:s="library://ns.adobe.com/flex/spark" creationComplete="onCompleteHandler(event)"
+		  xmlns:mx="library://ns.adobe.com/flex/mx" width="100%" height="100%" xmlns:autoComplete="flex.ui.spark.autoComplete.*" xmlns:ns="http://code.google.com/p/flexlib/">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import entity.Invocie;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.FlexEvent;
+			[Bindable] private var dataArray:ArrayCollection;
+			[Bindable] public var custArray:ArrayCollection;
+			
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			
+			protected function onCompleteHandler(event:FlexEvent):void
+			{
+				// TODO Auto-generated method stub
+				
+			}
+			private function select():void{
+				var obj:Object = new Object();
+				obj.beginDate = beginDate.selectedDate;
+				obj.endDate = endDate.selectedDate;
+				obj.context = context.text;
+				dataArray=Invocie.findByParam(obj);
+				calcTotal();
+			}
+		]]>
+	</fx:Script>
+	<mx:VBox width="100%" height="100%" verticalGap="2">
+		<mx:HBox verticalAlign="middle" >
+			<autoComplete:AutoComplete id="customer" labelField="name" width="130" dataProvider="{custArray}"
+									   searchMode="sync" select="select()" prompt="客户"
+									   skinClass="flex.ui.spark.autoComplete.AutoCompleteSkin"
+									   searchFunction="searchFunction" 
+									   emptyString="- 无 -" textAlign="left" />
+			<s:Label text="创建时间："/>
+			<mx:DateField  id="beginDate" selectedDate="{DateFormatHelper.getDateBefore(3)}" 
+						   yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+						   selectableRange="{{ rangeEnd : endDate.selectedDate}}" change="select()" />
+			<s:Label text="至"/>
+			<mx:DateField id="endDate" selectedDate="{new Date()}"
+						  yearNavigationEnabled="true" formatString="YYYY-MM-DD"
+						  selectableRange="{{rangeStart : beginDate.selectedDate}}" change="select()"/>
+			<ns:PromptingTextInput id="context" prompt="综合搜索" enter="select()"/>
+			<mx:Image id="refreshBtn" buttonMode="true" source="@Embed('/img/refresh.png')" click="select()" toolTip="刷新"
+					  mouseOver="effectRefresh.play()" mouseOut="effectRefresh.play()"/>
+		</mx:HBox>
+		<mx:DataGrid id="dataGrid" width="100%" height="100%" dataProvider="{dataArray}" editable="true" itemEditEnd="dataGrid_itemEditEndHandler(event)">
+			<mx:columns>
+				<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="55" editable="false"/>
+				<mx:DataGridColumn headerText="客户" dataField="accName" width="200" editable="false" textAlign="left">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox>
+								<s:ComboBox id="khCombo" dataProvider="{outerDocument.custArray}" labelField="name" skinClass="skins.my.ComboBoxSkin2" selectedItem="{ArrayCollectionUtil.getItem(data.accName,outerDocument.custArray,'name',data.accName)}"
+											mouseOver="bmCombo.openButton.visible=true;" mouseOut="bmCombo.openButton.visible=false;" width="100%" textAlign="left" focusOut="bmCombo_focusOutHandler(event)">
+								</s:ComboBox>
+								<fx:Script>
+									<![CDATA[
+										import common.ArrayCollectionUtil;
+										
+										import entity.AccountStat;
+										import entity.Customer;
+										
+										protected function bmCombo_focusOutHandler(event:FocusEvent):void
+										{
+											// TODO Auto-generated method stub
+											if(bmCombo.selectedItem is Customer){
+												data.accName = bmCombo.selectedItem.name;
+											}else{
+												data.accName = bmCombo.selectedItem==null?"":bmCombo.selectedItem;
+											}
+											outerDocument.save(data as AccountStat);
+										}
+										
+									]]>
+								</fx:Script>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="单据号" dataField="code" textAlign="left"/>
+				<mx:DataGridColumn headerText="应收金额" dataField="amount" textAlign="right">
+					<mx:itemEditor>
+						<fx:Component>
+							<mx:TextInput restrict="0-9" />
+						</fx:Component>
+					</mx:itemEditor>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="实收金额" dataField="realAmount" textAlign="right">
+					<mx:itemEditor>
+						<fx:Component>
+							<mx:TextInput restrict="0-9"/>
+							
+						</fx:Component>
+					</mx:itemEditor>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="抹零" dataField="smallAmount" textAlign="right" editable="false" itemRenderer="skins.gridTextColor.AccountStatColorItemRenderer">
+					<mx:itemEditor>
+						<fx:Component>
+							<mx:TextInput restrict="0-9" />
+						</fx:Component>
+					</mx:itemEditor>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="创建时间" dataField="createTime" labelFunction="DateFormatHelper.Format10" editable="false"/>
+				<mx:DataGridColumn headerText="备注" dataField="memo" textAlign="left"/>
+			</mx:columns>
+		</mx:DataGrid>
+		
+	</mx:VBox>
+</s:Module>

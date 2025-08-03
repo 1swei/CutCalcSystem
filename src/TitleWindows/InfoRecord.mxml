@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="进货记录" creationComplete="init(event)"
+			   xmlns:s="library://ns.adobe.com/flex/spark" close="PopUpEffect.Hide(this);"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="800" height="610" 
+			   horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" >
+	<fx:Script>
+		<![CDATA[
+			import common.DateFormatHelper;
+			
+			import entity.InfoMsg;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			private var dataAllArray:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			public var money:Number=0;
+			[Bindable]
+			public var moneyYes:Number=0;
+			[Bindable]
+			public var moneyNo:Number=0;
+			private var dbStatement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			protected function init(event:FlexEvent):void
+			{
+				getInfoMsgs();
+			}
+			public function getInfoMsgs():void
+			{
+				dbStatement.text = "SELECT * from InfoMsg";
+				dbStatement.itemClass=InfoMsg;
+				dbStatement.execute();
+				handleResult();
+			}
+			
+			private function handleResult():void
+			{
+				var result:SQLResult = dbStatement.getResult();
+				if (result != null) {  
+					this.dataArray = new ArrayCollection(result.data);
+					dataAllArray = new ArrayCollection(result.data);
+					dataArray_refrech();
+				}
+			}
+			private var filterArray:Array = new Array();
+			private function dataArray_refrech():void{
+				var str:String = "";
+				if((str=StringUtil.trim(textIn.text)).length>0){
+					filterArray = str.split(" ");
+				}else{
+					filterArray = new Array();
+				}
+				var array:ArrayCollection = new ArrayCollection(dataAllArray.toArray());
+				if(array!=null&&array.length>0){
+					array.filterFunction = rwbAllArrayFilterFunction;
+					array.refresh();
+				}
+				dataArray = new ArrayCollection(array.toArray());
+				totalMoney();
+			}
+			private function totalMoney():void{
+				money=0;
+				moneyNo=0;
+				moneyYes=0;
+				if(dataArray!=null&&dataArray.length>0){
+					var info:InfoMsg;
+					for(var i:int=0;i<dataArray.length;i++){
+						info=dataArray.getItemAt(i) as InfoMsg;
+						if(info.isPay==1){
+							moneyNo+=info.money;
+						}else if(info.isPay==2){
+							moneyYes+=info.money;
+						}
+						money+=info.money;
+					}
+				}else{
+					money=0;
+					moneyNo=0;
+					moneyYes=0;
+				}
+			}
+			private function rwbAllArrayFilterFunction(item:InfoMsg):Boolean{
+				var result:Boolean = true;
+				if(result&&item.infoTime!=null){
+					if(beginDate.selectedDate!=null
+						&&DateFormatHelper.Format1(beginDate.selectedDate)>item.infoTime){
+						result = false;
+					}
+					if(endDate.selectedDate!=null
+						&&DateFormatHelper.Format1(endDate.selectedDate)+" 24:59"<=item.infoTime){
+						result = false;
+					}
+				}
+				if(result&&filterArray!=null&&filterArray.length>0){
+					var i:int = filterArray.length;
+					for each(var s:String in filterArray){ 
+						if(s==null||(s=StringUtil.trim(s)).length<=0){
+							i--;
+							continue;
+						}
+						if((item.bz!=null&&item.bz.indexOf(s)>-1)
+						){
+							i--;
+						}
+					}
+					result = (i==0?true:false);
+				}
+				
+				
+				return result;
+				
+			}
+			private function errorHandler(error:SQLError):void
+			{
+				trace("Error Occurred with id: " + error.errorID  + " operation " + error.operation + " message " + error.message);
+			}
+			private function createError(event:SQLErrorEvent):void
+			{
+				trace("Error Occurred with id: " + event.error.errorID  + " message " + event.error.message);
+			}
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			protected function modify():void
+			{
+				showOrderDetailPanel(dataGrid.selectedItem as InfoMsg);
+			}
+			private function showOrderDetailPanel(item:InfoMsg):void{
+				var panel:InfoDoc=new InfoDoc();
+				panel.item = item;
+				panel.dbStatement = dbStatement;
+				panel.owner = this;
+				PopUpEffect.Show(panel,this.parentApplication as DisplayObject);
+			}
+			public function deleteDate():void{
+				Alert.show("删除后数据不可恢复，是否继续？","警告",Alert.YES|Alert.CANCEL,null,alertCloseHandler);
+			}
+			private function alertCloseHandler(e:CloseEvent):void{
+				if(e.detail == Alert.YES){
+					dbStatement.text = "delete from InfoMsg where id="+dataGrid.selectedItem.id+"";
+					dbStatement.execute();
+					getInfoMsgs();
+				}
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox verticalGap="2" width="100%" height="100%">
+		<mx:HBox width="100%" paddingLeft="2" paddingTop="2" paddingBottom="2" verticalAlign="middle" horizontalGap="4" >
+			<mx:Button label="新建" height="24" click="showOrderDetailPanel(new InfoMsg())"/>
+			<mx:Button label="修改" height="24" click="modify()" enabled="{dataGrid.selectedItem!=null}"/>
+			<mx:Button label="删除" height="24" click="deleteDate()" enabled="{dataGrid.selectedItem!=null}"/>
+			<s:Label text="总金额：{money}	已付：{moneyYes}	未付：{moneyNo}"/>
+		</mx:HBox>
+		<mx:HBox width="100%" paddingLeft="2" height="25" verticalAlign="middle" horizontalGap="4">
+			<s:Label text="进货时间："/>
+			<skins:MyDateField id="beginDate" selectedDate="{DateFormatHelper.getDateBefore(7)}" 
+						  selectableRange="{{ rangeEnd : endDate.selectedDate}}" change="getInfoMsgs()"/>
+			<s:Label text="至"/>
+			<skins:MyDateField id="endDate" selectedDate="{new Date()}"
+						  selectableRange="{{rangeStart : beginDate.selectedDate}}" change="getInfoMsgs();"/>
+			
+			<mx:Label text="综合搜索"/>
+			<mx:TextInput id="textIn" height="24" width="125" enter="DateFormatHelper.focus(event);getInfoMsgs();" creationComplete="textIn.setFocus();" change="dataArray_refrech();"/>
+		</mx:HBox>
+		<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" doubleClickEnabled="true" doubleClick="modify()">
+			<mx:columns>
+				<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="40"/>
+				<mx:DataGridColumn dataField="bz" headerText="进货明细" textAlign="left" width="150"/>
+				<mx:DataGridColumn dataField="kg" headerText="进货数量" textAlign="left" width="125"/>
+				<mx:DataGridColumn dataField="money" headerText="进货金额" width="80"/>
+				<mx:DataGridColumn dataField="infoTime" headerText="进货时间" textAlign="left" width="125"/>
+				<mx:DataGridColumn dataField="isPay" width="55" headerText="是否付款" >
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" dataChange="zty(data)">				
+								<mx:Image id="pic" width="15" height="15" />
+								<fx:Script>
+									<![CDATA[
+										import entity.InfoMsg;
+										
+										import mx.core.FlexGlobals;
+										private function zty(u:Object):void{
+											var data:InfoMsg=u as InfoMsg;
+											if(data!=null){
+												if(data.isPay==2){
+													pic.source = FlexGlobals.topLevelApplication.YES_IMG;
+													pic.toolTip = "已付款";
+												}else if(data.isPay==1){
+													pic.source = FlexGlobals.topLevelApplication.NO_IMG;
+													pic.toolTip = "未付款";
+												}
+											}
+										}
+									]]>
+								</fx:Script>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>	
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+	</mx:VBox>
+</s:TitleWindow>

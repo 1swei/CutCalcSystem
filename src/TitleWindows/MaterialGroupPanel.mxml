@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" title="物料组合" creationComplete="oncomplete()"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:mx="library://ns.adobe.com/flex/mx" width="650" height="600" close="PopUpEffect.Hide(this);"
+			   horizontalCenter="0" verticalCenter="0" xmlns:skins="skins.*" xmlns:common="common.*" xmlns:commonGroup="commonGroup.*" >
+	<fx:Script>
+		<![CDATA[
+			import common.DataCmdEvent;
+			import common.DateFormatHelper;
+			import common.FlexClientConfig;
+			
+			import entity.Group;
+			import entity.Material;
+			import entity.MaterialGroup;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.DataGridEvent;
+			import mx.events.FlexEvent;
+			import mx.utils.StringUtil;
+			
+			import skins.PopUpEffect;
+			
+			
+			[Bindable]
+			public var dataArray:ArrayCollection;
+			[Bindable]
+			public var selectedMaterials:ArrayCollection;
+			[Bindable]
+			public var theGroup:Group;
+			private var statement:SQLStatement=FlexGlobals.topLevelApplication.statement;
+			
+			private function oncomplete():void{
+				mtlImport.addEventListener(MaterialImport.IMPORT,importMtl);
+				getGroups();
+			}
+			public function importMtl(e:DataCmdEvent):void{
+				if(selectedMaterials==null){
+					selectedMaterials=new ArrayCollection();
+				}
+				selectedMaterials.addItem(e.data as Material);
+			}
+			public function getGroups():void
+			{
+				this.dataArray=Group.findAll(false,true);
+			}
+			
+			public function createGroup():void
+			{
+				var _group:Group=new Group();
+				if(dataArray==null){
+					dataArray=new ArrayCollection();
+				}
+				dataArray.addItem(_group);
+			}
+			private function indexLabelFunction(obj:Object,col:DataGridColumn):String{
+				if(dataArray!=null&&dataArray.length>0){
+					return ""+( dataArray.getItemIndex(obj)+1);
+				}else{
+					return "";
+				}
+			}
+			private function theValueLabelFunction(obj:Object,col:DataGridColumn):String{
+				var result:String = "";
+				if(obj.materials&&obj.materials.length>0){
+					for each(var item:Material in obj.materials){
+						result+=item.brand+item.name+item.spec+"\n";
+					}
+				}
+				return result;
+			}
+			
+			protected function dataGrid_itemEditEndHandler(event:DataGridEvent):void
+			{
+				var ti:mx.controls.TextInput=event.currentTarget.itemEditorInstance;
+				var text:String=ti.text;
+				if(text==""||StringUtil.trim(text).length==0){
+					return
+				}
+				var _group:Group=dataGrid.selectedItem as Group;
+				if(_group.name==text){
+					return;
+				}
+				_group.name=text;
+				//这个方法不能刷新dataArray 不然会执行2次
+				if(_group.id==0){
+					_group.id=Group.insert(_group);
+				}else{
+					Group.update(_group);
+				}
+			}
+			public function deleteGroup(id:int):void
+			{
+				Alert.show("删除后数据不可恢复，是否继续？","警告",Alert.YES|Alert.CANCEL,null,function alertCloseHandler(e:CloseEvent):void{
+					if(e.detail == Alert.YES){
+						if(theGroup){
+							theGroup=null;
+						}
+						if(id>0){
+							Group.del(id);
+						}
+						getGroups();
+					}
+				});
+			}
+			
+			public function showBindMaterial(_group:Group):void{
+				if(_group==null||_group.id==0){
+					return;
+				}
+				changeMaterialsPanel.visible=true;
+				changeMaterialsPanel.includeInLayout=true;
+				theGroup=_group;
+				selectedMaterials=MaterialGroup.findMtlsByGroupId(_group.id);
+				if(selectedMaterials==null){
+					selectedMaterials=new ArrayCollection();
+				}
+				
+			}
+			private function closeBindMaterial():void{
+				changeMaterialsPanel.visible=false;
+				selectedMaterials=null;
+				getGroups();
+			}
+			private function saveBindMaterial():void{
+				if(selectedMaterials==null||selectedMaterials.length==0){
+					Alert.show("物料不能为空","提示");
+					return;
+				}
+				if(theGroup==null||theGroup.id==0){
+					Alert.show("该组尚未保存或已被删除","提示");
+					return;
+				}
+				//1:清空组下的所有物料信息
+				MaterialGroup.delByGroupId(theGroup.id);
+				
+				//2:重新插入
+				var theMaterial:Material;
+				var newMaterialGroup:MaterialGroup;
+				for(var i:int=0;i<selectedMaterials.length;i++){
+					theMaterial=selectedMaterials.getItemAt(i) as Material;
+					newMaterialGroup=new MaterialGroup();
+					newMaterialGroup.groupId=theGroup.id;
+					newMaterialGroup.order=i+1;
+					newMaterialGroup.materialId=theMaterial.id;
+					MaterialGroup.insert(newMaterialGroup);
+				}
+				closeBindMaterial();
+			}
+			private function valueLabelFunction(obj:Object,col:DataGridColumn):String{
+				return obj.brand+obj.name+obj.spec;
+			}
+			public function deleAll():void{
+				if(selectedMaterials!=null){
+					selectedMaterials.removeAll();
+				}	
+			}
+			public function delMtl(mtl:Material):void{
+				selectedMaterials.removeItemAt(selectedMaterials.getItemIndex(mtl));
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	<mx:VBox verticalGap="2" paddingTop="-1" width="100%" height="100%">
+		<mx:DataGrid id="dataGrid" dataProvider="{dataArray}" width="100%" height="100%" sortableColumns="false"
+					 editable="true" itemEditEnd="dataGrid_itemEditEndHandler(event)" wordWrap="true" variableRowHeight="true" >
+			<mx:columns>
+				<mx:DataGridColumn width="30" editable="false">
+					<mx:headerRenderer>
+						<fx:Component>
+							<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle">
+								<mx:Image source="/img/add.png" click="outerDocument.createGroup()" buttonMode="true" toolTip="添加行"/>
+							</mx:HBox>
+						</fx:Component>
+					</mx:headerRenderer>
+					<mx:itemRenderer> 
+						<fx:Component>
+							<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle" >
+								<fx:Script>
+									<![CDATA[
+										import entity.SellDetail;
+									]]>
+								</fx:Script>
+								<mx:Image source="/img/del.png" click="outerDocument.deleteGroup(data.id as int)" buttonMode="true" toolTip="删除行"/>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="序号" labelFunction="indexLabelFunction" width="55" editable="false"/>
+				<mx:DataGridColumn dataField="name" headerText="组名" textAlign="left" width="110" />
+				<mx:DataGridColumn headerText="物料组合" textAlign="left" width="240" labelFunction="theValueLabelFunction" editable="false"/>
+					
+				<mx:DataGridColumn headerText="操作" editable="false">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="center" horizontalGap="2">	
+								<mx:Button label="选择" click="outerDocument.showBindMaterial(data as Group)" width="55"/>
+								<fx:Script>
+									<![CDATA[
+										import entity.Group;
+										import mx.core.FlexGlobals;
+									]]>
+								</fx:Script>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>	
+				</mx:DataGridColumn>
+			</mx:columns>
+		</mx:DataGrid>
+	</mx:VBox>
+	<mx:VBox visible="false" includeInLayout="false" id="changeMaterialsPanel" horizontalAlign="center" verticalGap="4" verticalCenter="0" horizontalCenter="0"
+			 backgroundColor="{FlexClientConfig.getInstance().Theme}"
+			 borderVisible="true" borderColor="{FlexClientConfig.getInstance().Theme}" paddingLeft="5" paddingRight="5" paddingTop="5" paddingBottom="5">
+		<mx:Label text="{theGroup.name}"/>
+		<commonGroup:MaterialImport id="mtlImport" height="400"/>
+		<mx:DataGrid dataProvider="{selectedMaterials}" width="100%" height="180" 
+					 allowDragSelection="true" allowMultipleSelection="true" sortableColumns="false"
+					 dragMoveEnabled="true" dragEnabled="true" dropEnabled="true">
+			<mx:columns>
+				<mx:DataGridColumn width="30">
+					<mx:headerRenderer>
+						<fx:Component>
+							<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle">
+								<mx:Image source="/img/del.png" click="outerDocument.deleAll()" buttonMode="true" toolTip="删除所有"/>
+							</mx:HBox>
+						</fx:Component>
+					</mx:headerRenderer>
+					<mx:itemRenderer> 
+						<fx:Component>
+							<mx:HBox width="100%" horizontalAlign="center" verticalAlign="middle" >
+								<fx:Script>
+									<![CDATA[
+										import entity.Material;
+									]]>
+								</fx:Script>
+								<mx:Image source="/img/del.png" click="outerDocument.delMtl(data as Material)" buttonMode="true" toolTip="删除行"/>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:DataGridColumn>
+				<mx:DataGridColumn headerText="名称" dataField="name" labelFunction="valueLabelFunction" textAlign="left"/>
+				<mx:DataGridColumn headerText="单位" dataField="unit" width="50"/>
+				<mx:DataGridColumn headerText="单价"  dataField="price" width="55" textAlign="right"/>
+			</mx:columns>
+		</mx:DataGrid>
+		<mx:HBox horizontalAlign="center" horizontalGap="2">
+			<mx:Button click="saveBindMaterial()" label="保存" width="55"/>
+			<mx:Button click="closeBindMaterial()" label="取消" width="55"/>
+		</mx:HBox>
+	</mx:VBox>
+</s:TitleWindow>

@@ -1,0 +1,468 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009" minWidth="770" minHeight="550"
+					   xmlns:s="library://ns.adobe.com/flex/spark" backgroundColor="#d0e9ff" width="100%" height="100%"
+					   xmlns:mx="library://ns.adobe.com/flex/mx" initialize="new NativeMessage();" 
+					   creationComplete="init_sys()"  showStatusBar="false" xmlns:my="skins.my.*" xmlns:ns="http://code.google.com/p/flexlib/"
+					   >
+	<s:layout>
+		<s:VerticalLayout verticalAlign="middle" horizontalAlign="center" gap="0" />
+	</s:layout>
+	<fx:Declarations>
+		<fx:XML id="menuXML" source="/datasource/Menu.xml"/>
+	</fx:Declarations>
+	<fx:Style source="css/windowsCSS.css"/>
+	<fx:Script>
+		<![CDATA[
+			import TitleWindows.AluProfilePanel;
+			import TitleWindows.BackUpPanel;
+			import TitleWindows.CodeSetWin;
+			import TitleWindows.ColorManage;
+			import TitleWindows.CustomFormulaDoc;
+			import TitleWindows.ExplainPanel;
+			import TitleWindows.QrCodePanel;
+			import TitleWindows.RegWindow;
+			
+			import common.FileUtil;
+			import common.FlexClientConfig;
+			import common.NativeMessage;
+			import common.db.DBUtil;
+			
+			import draw.panel.DrawPanel2;
+			
+			import entity.AluPro;
+			import entity.CodeSet;
+			import entity.Regs;
+			import entity.Set;
+			import entity.enum.ModuleCode;
+			
+			import flexlib.controls.tabBarClasses.SuperTab;
+			import flexlib.events.SuperTabEvent;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.core.IFlexDisplayObject;
+			import mx.events.ListEvent;
+			import mx.managers.DragManager;
+			import mx.managers.PopUpManager;
+			import mx.managers.ToolTipManager;
+			import mx.modules.ModuleLoader;
+			
+			import skins.PopUpEffect;
+			import skins.colorPicker.ColorPicker;
+			
+			import util.TreeUtil;
+			private var popUpManager:PopUpManager;   
+			private var dragManager:DragManager;
+			[Embed(source="img/finish.png")]
+			public var YES_IMG:Class;
+			[Embed(source="img/delete.png")]
+			public var NO_IMG:Class;
+			
+			[Embed(source="img/delete.png")]
+			public var NOPAY_IMG:Class;
+			[Embed(source="img/delete_1.png")]
+			public var DELETE_IMG:Class;
+			[Embed(source="img/finish.png")]
+			public var FINISH_IMG:Class;
+			
+			[Embed(source="/img/ico/customer.png")]
+			public var CustomerIco:Class;
+			[Embed(source="/img/ico/order.png")]
+			public var OrderIco:Class;
+			[Embed(source="/img/ico/sell.png")]
+			public var SellIco:Class;
+			[Embed(source="/img/ico/purchase.png")]
+			public var PurchaseIco:Class;
+			[Embed(source="/img/ico/alupro.png")]
+			public var AluProIco:Class;
+			[Embed(source="/img/ico/color.png")]
+			public var ColorIco:Class;
+			[Embed(source="/img/ico/window.png")]
+			public var WindowIco:Class;
+			[Embed(source="/img/ico/material.png")]
+			public var MaterialIco:Class;
+			[Embed(source="/img/ico/qrcode.png")]
+			public var QrcodeIco:Class;
+			[Embed(source="/img/ico/code.png")]
+			public var CodeIco:Class;
+			[Embed(source="/img/ico/backup.png")]
+			public var BackupIco:Class;
+			[Embed(source="/img/ico/example.png")]
+			public var ExampleIco:Class;
+			[Embed(source="/img/ico/list.png")]
+			public var ListIco:Class;
+			[Embed(source="/img/ico/allfix.png")]
+			public var FixIco:Class;
+			[Embed(source="/img/ico/account.png")]
+			public var AccountStatIco:Class;
+			[Bindable]
+			public var version:String;
+			//系统配置文件初始化
+			public function init_sys():void{
+				var urlLoader:URLLoader=new URLLoader();  
+				urlLoader.addEventListener(Event.COMPLETE,handleURLLoaderCompleted);
+				urlLoader.load(new URLRequest(FileUtil.dbConfig));  
+			}
+			private function handleURLLoaderCompleted(event:Event):void{  
+				var loader:URLLoader=event.target as URLLoader;  
+				var xml:XML=XML(loader.data);
+				//\\\\192.168.0.158\\1\\CNSystem.db
+				//数据库地址
+				FileUtil.dataBasePath = "\\\\"+xml.ip+"\\"+xml.sharePath+"\\CNSystem.db";
+				//窗型图库地址
+				FileUtil.winRemotePath = "\\\\"+xml.ip+"\\"+xml.sharePath+"\\windows\\";
+				init(FileUtil.dataBasePath);
+			}  
+			
+			public function init(dbUrl:String):void{
+				//构建菜单
+				menuCreate();
+				//窗口最大化
+				maximize();
+				//窗型数据同步
+				syncWin();
+				//初始化数据库
+				initDB(dbUrl);
+				//系统样式设置
+				setDefaultStyle();
+				//展开所有菜单
+				TreeUtil.expandTree(menuTree);
+				//tip立即显示
+				ToolTipManager.showDelay=0;
+				//首页展示
+				
+				//数据库检索是否注册
+				if(!Regs.checkSys()){
+					var panel:RegWindow=new RegWindow();
+					PopUpEffect.Show(panel,this);
+				}
+				getAppVersion();
+				//loadHome();
+			}
+			
+			
+			/**链接数据库，创建相关表*/
+			public var connectionDB:SQLConnection;
+			public var statement:SQLStatement;
+			private var dbFile:File;
+			private function initDB(dbUrl:String):void{
+				dbFile = new File(dbUrl);
+				statement = new SQLStatement();
+				connectionDB = new SQLConnection();
+				statement.sqlConnection = connectionDB;
+				connectionDB.open(dbFile);
+				createTables();
+				createInitData();
+			}
+			/**同步共享路径窗型到本地*/
+			private function syncWin():void{
+				var remoteFile:File = new File(FileUtil.winRemotePath);
+				var localFile:File = new File(FileUtil.winTmpPath);
+				
+				FileUtil.createDirPath(remoteFile);
+				FileUtil.createDirPath(localFile);
+				//窗型同步
+//				var fileArrayRemote:Array = remoteFile.getDirectoryListing();
+//				var fileArrayLocal:Array = localFile.getDirectoryListing();
+//				if(fileArrayRemote!=null&&fileArrayLocal==null){
+//					
+//				}
+				FileUtil.copyDirFile(remoteFile,localFile);
+				
+			}
+			private function fixData():void
+			{
+				
+				 var sql:String="alter table orders add printTimes integer" ;
+				statement.text = sql;
+				statement.execute();
+				Alert.show("维护成功，请勿重复点击.");
+			}
+			
+			
+			
+			/**创建表*/
+			private function createTables():void{
+				//订单主表
+				var sql:String="CREATE TABLE IF NOT EXISTS Orders " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT, khName TEXT, khPhone TEXT," +
+					"khAddress TEXT, xdTime TEXT, stateOut TEXT, stateIn TEXT,zhaiyao TEXT,bz TEXT,printTimes INTEGER,area FLOAT);";
+				//订单子表
+				sql+="CREATE TABLE IF NOT EXISTS OrderDetails " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT, orderId INTEGER,xh INTEGER,color TEXT,ylType INTEGER, boLi INTEGER,jiShan INTEGER, width FLOAT, height FLOAT, gudingTop INTEGER,gudingDown INTEGER" +
+					",gdTopHeight FLOAT,gdDownHeight FLOAT,shouKou INTEGER,zhuanJiao INTEGER,bz TEXT,zzNumTop INTEGER ,zzNumDown INTEGER,num INTEGER,cxType INTEGER,picName TEXT,isGDH INTEGER);";
+				//颜色表
+				sql+="CREATE TABLE IF NOT EXISTS Colors " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT, color TEXT,state TEXT);";
+				//注册
+				sql+="CREATE TABLE IF NOT EXISTS Regs " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT, value TEXT,state TEXT);";
+				//进货
+				sql+="CREATE TABLE IF NOT EXISTS InfoMsg " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT, bz TEXT, kg FLOAT,unit FLOAT,money FLOAT,isPay INTEGER,infoTime TEXT);";
+				//型材配置表
+				sql+="CREATE TABLE IF NOT EXISTS AluPro " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, state TEXT,type INTEGER,zhongTingXS FLOAT,zhongTingXS_G FLOAT,shangXiaHuaXS FLOAT,hengLiaoXS FLOAT,isZJ INTEGER" +
+					",ggqMaxXS FLOAT,ggqMaxGSXS FLOAT,ggqMaxGXXS FLOAT,ggqMaxQGXS FLOAT,ggqMinXS FLOAT,ggqMinGSXS FLOAT,ggqMinGXXS FLOAT,ggqMinQGXS FLOAT,shangXiaFang2XS FLOAT" +
+					",shangXiaFang3XS FLOAT,shangXiaFang3XS_SK FLOAT,shangXiaFang4XS FLOAT,shangXiaFang6XS FLOAT,yaTiaoH FLOAT,yaTiaoH_C FLOAT,yaTiaoW FLOAT,yaTiaoH_N FLOAT,yaTiaoW_N FLOAT,yaTiao FLOAT,neikongXS FLOAT,tempNum FLOAT,bz TEXT,ggqMaxPSPXGD FLOAT,ggqMaxGSPXGD FLOAT,ggqMinPSPXGD FLOAT,ggqMinGSPXGD FLOAT);";
+				//料名表
+				sql+="CREATE TABLE IF NOT EXISTS AluProDetail " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT,aluProId INTEGER, name TEXT);";
+				//物料表
+				sql+= "CREATE TABLE IF NOT EXISTS MaterialType " +
+					"(id Integer PRIMARY KEY AUTOINCREMENT,name text,code text,isUsing Boolean,parentId Integer);" +
+					"CREATE TABLE IF NOT EXISTS Material" +
+					"(id Integer PRIMARY KEY AUTOINCREMENT,typeId Integer,typeName text,code text,name text,spec text,isUsing Boolean,brand text,unit text,price FLOAT,loss FLOAT);";
+				//客户表
+				sql+="CREATE TABLE IF NOT EXISTS Customer " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, state TEXT,type INTEGER, address TEXT, phone TEXT, code TEXT, typeId INTEGER);";
+				//玻璃配置
+				sql+="CREATE TABLE IF NOT EXISTS GlassSizeSet " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT,AluProId INTEGER, heigth_in FLOAT, width_in FLOAT, heigth_stc_xs FLOAT, width_stc_xs FLOAT,glass_zt FLOAT,glass_bf FLOAT,glass_gd FLOAT);";
+				//自定义公式
+				sql+="CREATE TABLE IF NOT EXISTS CustomFormula " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT,aluProId INTEGER, windowsPicName TEXT, materialName TEXT, amount int, formula TEXT,type int,orderNum int,tag TEXT);";
+				//变量保存
+				sql+="CREATE TABLE IF NOT EXISTS PicBL " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT,picName TEXT, blName TEXT,blX FLOAT,blY FLOAT,picWidth FLOAT,picHeight FLOAT);";
+				//订单变量
+				sql+="CREATE TABLE IF NOT EXISTS OrderDetailBL " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT,detailId INTEGER, blName TEXT,blValue FLOAT);";
+				//销售
+				sql+="CREATE TABLE IF NOT EXISTS Sell " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT,code TEXT, custId INTEGER,custName TEXT,memo TEXT,state TEXT,amount FLOAT,createTime TEXT,custPhone TEXT,custAddress TEXT,isSaved Boolean);";
+				//销售明细
+				sql+="CREATE TABLE IF NOT EXISTS SellDetail " +
+					" ( id INTEGER PRIMARY KEY AUTOINCREMENT,sellId INTEGER, materialId INTEGER,materialName TEXT,number FLOAT,loss FLOAT,amount FLOAT,price FLOAT,unit TEXT,memo TEXT,numberMemo TEXT);";
+				//编号表
+				sql+="CREATE TABLE IF NOT EXISTS CodeSet " +
+					"( id INTEGER PRIMARY KEY AUTOINCREMENT,name text,code text,body text,format text,repeat integer,[max] integer,[digit] integer,[module] text);";
+				//系统设置表
+				sql+="CREATE TABLE IF NOT EXISTS [Set] " +
+					"( id INTEGER PRIMARY KEY AUTOINCREMENT,[key] text,[value] text);";
+				//组表
+				sql+="CREATE TABLE IF NOT EXISTS [Group] " +
+					"( id INTEGER PRIMARY KEY AUTOINCREMENT,name text,type text,isUsing Boolean);";
+				//物料组表
+				sql+="CREATE TABLE IF NOT EXISTS MaterialGroup " +
+					"(groupId INTEGER,materialId INTEGER,[order] INTEGER);";
+				//对账表
+				sql+="CREATE TABLE IF NOT EXISTS AccountStat " +
+					"(id INTEGER PRIMARY KEY AUTOINCREMENT,accType INTEGER,accName text,amountType INTEGER,code text,createTime text,amount FLOAT,realAmount float,smallAmount float,source integer,memo text);";
+				
+				DBUtil.exeMore(sql);
+			}
+			
+			//插入初始数据
+			private function createInitData():void{
+				//编号数据
+				var codeList:ArrayCollection=CodeSet.findAll();
+				if(codeList==null||codeList.length==0){
+					var defaultList:ArrayCollection=ModuleCode.DEFAULT_MODULES;
+					var code:CodeSet;
+					for(var i:int=0;i<defaultList.length;i++){
+						var item:Object = defaultList.getItemAt(i);
+						code=new CodeSet();
+						code.code=item.code;
+						code.name=item.name;
+						code.module=item.module;
+						code.format="YYMMDD";
+						code.repeat=0;
+						code.digit=3;
+						code.max=0;
+						CodeSet.insert(code);
+					}
+				}
+			}
+			private function menuCreate():void{
+				var xml:XML = new XML(menuXML.toXMLString());
+				for(var i:int=xml.children().length()-1;i>=0;i--){//最外层  
+					var xml_2:XML = xml.children()[i];//第二层 
+					
+					if(xml_2 != null&&xml_2.@visible == "false"){
+						delete xml.children()[i];
+						continue;
+					}
+					
+					for(var j:int=xml_2.children().length()-1;j>=0;j--){
+						var xml_3:XML = xml_2.children()[j];//第三层 
+						if( xml_3 != null && xml_3.@visible == "false"){
+							delete xml_2.children()[j];
+						}
+					}
+				}
+				menuTree.dataProvider=xml.menuitem;
+			}
+			private function expandItem(evt:ListEvent):void{
+				var item:Object = Tree(evt.currentTarget).selectedItem;
+				if (menuTree.dataDescriptor.isBranch(item)) {
+					menuTree.expandItem(item, !menuTree.isItemOpen(item), true);
+				}
+			}
+			//所有已打开的模块
+			public var openModules:Array=new Array();
+			protected function menuTree_itemClickHandler(event:ListEvent):void
+			{
+				if(!Regs.checkSys()){
+					Alert.show("检测到您尚未注册，请注册后使用！","提示");
+					return;
+				} 
+				expandItem(event);
+				if(event.itemRenderer.data.hasOwnProperty("@mod")){
+					var modulename:String=event.itemRenderer.data.@label;
+					var moduleurl:String=event.itemRenderer.data.@mod;
+					var findIndex:int=openModules.indexOf(modulename);
+					if(findIndex>-1){
+						mainTab.selectedIndex=findIndex;
+						return;
+					}
+					var moduleLoader:ModuleLoader=new ModuleLoader();
+					moduleLoader.url = moduleurl;
+					moduleLoader.label= modulename;
+					//mainTab.icon=event.itemRenderer.data.@ico;
+					mainTab.addChild(moduleLoader);
+					openModules.push(modulename);
+					mainTab.selectedIndex=mainTab.numChildren-1;
+				}else if(event.itemRenderer.data.hasOwnProperty("@titlewin")){
+					/**弹出窗,非模块*/
+					var titleWin:IFlexDisplayObject;
+					if(event.itemRenderer.data.@titlewin=="AluProfilePanel"){
+						titleWin = new AluProfilePanel();
+					}else if(event.itemRenderer.data.@titlewin=="ColorManage"){
+						titleWin = new ColorManage();
+					}else if(event.itemRenderer.data.@titlewin=="CustomFormulaDoc"){
+						titleWin = new CustomFormulaDoc();
+					}else if(event.itemRenderer.data.@titlewin=="QrCodePanel"){
+						titleWin = new QrCodePanel();
+					}else if(event.itemRenderer.data.@titlewin=="BackUpPanel"){
+						titleWin = new BackUpPanel();
+					}else if(event.itemRenderer.data.@titlewin=="ExplainPanel"){
+						titleWin = new ExplainPanel();
+					}else if(event.itemRenderer.data.@titlewin=="CodeSetWin"){
+						titleWin = new CodeSetWin();
+					}else if(event.itemRenderer.data.@titlewin=="FixData"){
+						fixData();
+					}
+					
+					if(titleWin==null){
+						return;
+					}
+					PopUpEffect.Show(titleWin,this);
+				}
+			}
+			private function loadHome():void{
+				var moduleLoader:ModuleLoader=new ModuleLoader();
+				moduleLoader.url = "../module/HomeModule.swf";
+				moduleLoader.label= "首页";
+				//mainTab.icon=event.itemRenderer.data.@ico;
+				mainTab.addChild(moduleLoader);
+				openModules.push("首页");
+				mainTab.selectedIndex=mainTab.numChildren-1;
+				
+			}
+			protected function mainTab_tabCloseHandler(event:SuperTabEvent):void
+			{
+				openModules.splice(event.tabIndex,1);
+			}
+			//FlexGlobals.topLevelApplication.
+			private var cssDeclaration:CSSStyleDeclaration = styleManager.getStyleDeclaration("global");
+			private function changeColorStyle():void{
+				Set.insertOrUpdate(Set.COLOR,colorPick.selectedColor.toString(16));
+				cssDeclaration.setStyle("chromeColor", colorPick.selectedColor);
+				FlexClientConfig.getInstance().Theme=colorPick.selectedColor;
+				
+			}
+			private function changeFontSize():void{
+				Set.insertOrUpdate(Set.FONTSIZE,sysFontSize.selectedItem.value);
+				cssDeclaration.setStyle("fontSize", sysFontSize.selectedItem.value);
+			}
+			//设置系统默认样式
+			private function setDefaultStyle():void{
+				var local:Set = Set.findByKey(Set.COLOR);
+				if(local!=null){
+					cssDeclaration.setStyle("chromeColor","#"+local.value);
+					colorPick.selectedColor=mx.core.Singleton.getInstance("mx.styles::IStyleManager2").getColorName("0x"+local.value);//("#"+local.value) as uint;
+					FlexClientConfig.getInstance().Theme=colorPick.selectedColor;
+				}
+				local = Set.findByKey(Set.FONTSIZE);
+				if(local!=null){
+					cssDeclaration.setStyle("fontSize",local.value);
+					if(local.value=="12"){
+						sysFontSize.selectedIndex=0;
+					}else if(local.value=="14"){
+						sysFontSize.selectedIndex=1;
+					}else{
+						sysFontSize.selectedIndex=2;
+					}
+				}
+			}
+			
+			protected function button1_clickHandler(event:MouseEvent):void
+			{
+				var color:skins.colorPicker.ColorPicker=new skins.colorPicker.ColorPicker();
+			}
+			private function getAppVersion():void {
+				// 获取应用程序描述符
+				var appDescriptor:String = NativeApplication.nativeApplication.applicationDescriptor;
+				
+				// 解析 XML
+				var xml:XML = new XML(appDescriptor);
+				
+				// 处理命名空间
+				var namespace:Namespace = new Namespace("http://ns.adobe.com/air/application/3.1");
+				
+				// 获取 versionNumber 的值，使用命名空间
+				var versionList:XMLList = xml.namespace::versionNumber;
+				
+				// 确保 versionList 不为空后设置版本号
+				if (versionList.length() > 0) {
+					this.version = String(versionList[0]); // 转换为字符串并去除空格
+				} else {
+					this.version = "版本号未找到"; // 可选的错误处理
+				}
+				
+				trace("system version is", this.version);
+			}
+		]]>
+	</fx:Script>
+	<s:BorderContainer width="100%" height="100%"> <!--backgroundImage="@Embed(source='img/main.jpg')" -->
+		<s:layout>
+			<s:VerticalLayout paddingLeft="5" paddingRight="5" gap="2"
+							  paddingTop="5" paddingBottom="5"/>
+		</s:layout>
+		
+		<mx:HBox width="100%" verticalAlign="middle" horizontalAlign="left" paddingRight="40" borderVisible="true" borderStyle="solid">
+			<mx:Canvas>
+				<mx:Image height="28" width="28" left="10" source="@Embed('/img/App32.png')"/>
+			</mx:Canvas>
+			<mx:Label text="玉乾下料系统V{this.version}" fontWeight="bold" fontSize="24"/>
+			<mx:Spacer width="100%"/>
+			<mx:ComboBox id="sysFontSize" selectedIndex="0" change="changeFontSize()" height="21">
+				<fx:Array>
+					<fx:Object label="系统字体：小" value="12"/>
+					<fx:Object label="系统字体：中" value="14"/>
+					<fx:Object label="系统字体：大" value="16"/>
+				</fx:Array>
+			</mx:ComboBox>
+			<mx:ColorPicker id="colorPick" change="changeColorStyle()" toolTip="系统主题"/>
+			<!--<mx:Button click="button1_clickHandler(event)"/>-->
+		</mx:HBox>
+		<mx:HDividedBox width="100%" height="100%" >
+			<mx:Tree showRoot="false" id="menuTree" width="150" textAlign="left" iconField="@ico"
+					 labelField="@label" height="100%" itemClick="menuTree_itemClickHandler(event)">
+				
+			</mx:Tree>
+			<s:BorderContainer width="100%" height="100%" borderVisible="false">
+				<s:layout>
+					<s:VerticalLayout gap="2"/>
+				</s:layout>
+				<ns:SuperTabNavigator width="100%" height="100%" tabHeight="24" id="mainTab" closePolicy="{SuperTab.CLOSE_ALWAYS}" tabStyleName="SuperTabButtonStyle" paddingTop="4"
+									   borderVisible="false" popUpButtonPolicy="off" tabClose="mainTab_tabCloseHandler(event)" dragEnabled="false" dropEnabled="false">
+				</ns:SuperTabNavigator>
+			</s:BorderContainer>
+		</mx:HDividedBox>
+			
+	</s:BorderContainer>
+	
+</s:WindowedApplication>

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="Flex" version="4">
+  <component name="FlexBuildConfigurationManager" active="helpSystem">
+    <configurations>
+      <configuration name="helpSystem" target-platform="Desktop" main-class="helpSystem" output-file="helpSystem.swf" output-folder="$MODULE_DIR$/bin-debug" runtime-loaded-modules="module.OrderModule&#9;module/OrderModule.swf&#9;true&#10;module.CustomerModule&#9;module/CustomerModule.swf&#9;true&#10;module.PurchaseModule&#9;module/PurchaseModule.swf&#9;true&#10;module.SellModule&#9;module/SellModule.swf&#9;true&#10;module.MaterialModule&#9;module/MaterialModule.swf&#9;true&#10;module.SellReportModule&#9;module/SellReportModule.swf&#9;true">
+        <dependencies>
+          <entries>
+            <entry library-id="e0961d99-b0a8-49b4-a78b-904861e45e14">
+              <dependency linkage="Merged" />
+            </entry>
+          </entries>
+          <sdk name="4.6.0" />
+        </dependencies>
+        <compiler-options>
+          <map>
+            <entry key="compiler.locale" value="zh_CN" />
+          </map>
+          <option name="additionalOptions" value="-keep-all-type-selectors=true" />
+        </compiler-options>
+        <packaging-air-desktop use-generated-descriptor="false" custom-descriptor-path="$MODULE_DIR$/src/helpSystem-app.xml" package-file-name="helpSystem">
+          <files-to-package>
+            <FilePathAndPathInPackage file-path="$MODULE_DIR$/src/css" path-in-package="css" />
+            <FilePathAndPathInPackage file-path="$MODULE_DIR$/src/img" path-in-package="img" />
+            <FilePathAndPathInPackage file-path="$MODULE_DIR$/src/datasource" path-in-package="datasource" />
+          </files-to-package>
+          <AirSigningOptions keystore-path="D:/玉乾下料/证书18-3-25.p12" use-temp-certificate="false" />
+        </packaging-air-desktop>
+        <packaging-android />
+        <packaging-ios />
+      </configuration>
+    </configurations>
+    <compiler-options />
+  </component>
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+    </content>
+    <orderEntry type="jdk" jdkName="4.6.0" jdkType="Flex SDK Type (new)" />
+    <orderEntry type="sourceFolder" forTests="false" />
+    <orderEntry type="module-library" exported="">
+      <library type="flex">
+        <properties id="e0961d99-b0a8-49b4-a78b-904861e45e14" />
+        <CLASSES>
+          <root url="file://$MODULE_DIR$/libs" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+        <jarDirectory url="file://$MODULE_DIR$/libs" recursive="false" />
+      </library>
+    </orderEntry>
+  </component>
+</module>

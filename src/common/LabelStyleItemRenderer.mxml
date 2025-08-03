@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:MXDataGridItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						  xmlns:s="library://ns.adobe.com/flex/spark" 
+						  xmlns:mx="library://ns.adobe.com/flex/mx"
+						  focusEnabled="true"  dataChange="styleFunction()">
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		
+		.labelRed{
+			color:#ff0000;
+		}
+		.labelb{
+			color:#c61a04;
+		}
+		.labelBlue{
+			color:#1c7cff;
+		}
+		.canvasOverLittle{
+			backgroundColor:#CCCCCC;
+			borderStyle:solid;
+			borderVisible:true;
+			cornerRadius:3; 
+		}
+	</fx:Style>
+	<fx:Script>
+		<![CDATA[
+			[Bindable]
+			public var txt:String="";
+			[Bindable]
+			public var theWidth:Number=45;
+			[Bindable]
+			public var theHeight:Number=22;
+			[Bindable]
+			public var theVisible:Boolean=true;
+			
+			public function styleFunction(){
+				lab.text=txt+"\n";
+				lab.styleName="labelb";
+			}
+		]]>
+	</fx:Script>
+	<mx:Canvas id="can" width="100%" height="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<s:Label id="lab" toolTip="{txt}" textAlign="left"/>
+	</mx:Canvas>
+</s:MXDataGridItemRenderer>
