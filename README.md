@@ -22,6 +22,34 @@
 
 ---
 
+## 📸 系统界面实览 (System Screenshots)
+
+### 1. 业务工作台与下料单输出
+
+| 系统主工作台 (订单管理列表) | 车间下料单打印与导出预览 |
+| :---: | :---: |
+| ![主工作台与订单管理](docs/images/01-workbench-orders.png) | ![下料单打印与导出预览](docs/images/02-cutting-report-preview.png) |
+
+### 2. 参数化订单录入 (常规推拉 & 自定义窗型)
+
+| 常规推拉窗快速录入 | 自定义窗型参数化录入 |
+| :---: | :---: |
+| ![常规推拉窗订单录入](docs/images/03-sliding-window-order.png) | ![自定义窗型订单录入](docs/images/04-custom-window-order.png) |
+
+### 3. 型材库与算料公式推导配置
+
+| 型材规格库与单价损耗维护 | 推拉窗料精密扣减公式配置 |
+| :---: | :---: |
+| ![型材规格库与单价损耗维护](docs/images/05-profile-management.png) | ![推拉窗料精密扣减公式配置](docs/images/06-sliding-formula-config.png) |
+
+### 4. 异形窗型公式建模与经营看板
+
+| 异形窗型公式与变量联动配置 | 销售与生产统计看板 (订单/平方数走势) |
+| :---: | :---: |
+| ![异形窗型公式与变量联动配置](docs/images/08-custom-formula-editor.png) | ![销售与生产统计看板](docs/images/07-summary-dashboard.png) |
+
+---
+
 ## 🚀 核心架构与技术栈
 
 ```mermaid
@@ -97,6 +125,8 @@ helpsystem/
 ├── README.txt                 # 版本迭代发布履历
 ├── 统计sql.txt                # 核心统计与报表 SQL 查询脚本
 ├── bin-debug/                 # 本地构建输出与 SWF 文件
+├── docs/                      # 文档与系统截图资源
+│   └── images/                # 系统界面高清实览图
 ├── libs/                      # 外部引用类库与 SWC 扩展包
 └── src/
     ├── helpSystem-app.xml     # Adobe AIR 应用程序描述符清单（版本、权限、窗口配置）
